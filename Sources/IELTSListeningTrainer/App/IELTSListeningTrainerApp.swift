@@ -13,7 +13,7 @@ struct IELTSListeningTrainerApp: App {
                 }
         }
         .defaultSize(width: 1180, height: 760)
-        .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unified)
         .commands {
             PlaybackCommands(player: player)
         }

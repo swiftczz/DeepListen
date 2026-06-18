@@ -29,21 +29,25 @@ struct ContentView: View {
         .navigationTitle("IELTS Listening Trainer")
         .frame(minWidth: 960, minHeight: 640)
         .tint(theme.color)
-        .overlay(alignment: .topTrailing) {
-            HStack(spacing: 8) {
-                TitlebarActionButton(systemImage: "plus", label: "添加音视频") {
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button {
                     showsMediaImporter = true
+                } label: {
+                    Label("添加音视频", systemImage: "plus")
                 }
+                .help("添加音视频")
 
-                TitlebarActionButton(systemImage: "paintpalette", label: "主题色") {
+                Button {
                     showsThemePopover.toggle()
+                } label: {
+                    Label("主题色", systemImage: "paintpalette")
                 }
+                .help("主题色")
                 .popover(isPresented: $showsThemePopover, arrowEdge: .bottom) {
                     ThemeColorPopover(selection: themeSelection)
                 }
             }
-            .padding(.top, -42)
-            .padding(.trailing, 42)
         }
         .fileImporter(
             isPresented: $showsMediaImporter,
@@ -68,61 +72,5 @@ struct ContentView: View {
             }
         }
         .animation(.easeOut(duration: 0.18), value: player.libraryNotice)
-    }
-}
-
-private struct TitlebarActionButton: View {
-    var systemImage: String
-    var label: String
-    var action: () -> Void
-
-    @State private var isHovered = false
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 15, weight: .semibold))
-                .frame(width: 30, height: 28)
-        }
-        .buttonStyle(TitlebarActionButtonStyle(isHovered: isHovered))
-        .controlSize(.small)
-        .onHover { hovering in
-            isHovered = hovering
-        }
-        .help(label)
-        .accessibilityLabel(label)
-    }
-}
-
-private struct TitlebarActionButtonStyle: ButtonStyle {
-    var isHovered: Bool
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundStyle(configuration.isPressed ? Color.primary : Color.secondary)
-            .background {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(backgroundColor(isPressed: configuration.isPressed))
-            }
-            .shadow(
-                color: .black.opacity(configuration.isPressed ? 0.08 : (isHovered ? 0.10 : 0.16)),
-                radius: configuration.isPressed ? 2 : (isHovered ? 5 : 10),
-                y: configuration.isPressed ? 1 : (isHovered ? 2 : 4)
-            )
-            .scaleEffect(configuration.isPressed ? 0.94 : 1)
-            .animation(.easeOut(duration: 0.12), value: isHovered)
-            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
-    }
-
-    private func backgroundColor(isPressed: Bool) -> Color {
-        if isPressed {
-            return Color.secondary.opacity(0.18)
-        }
-
-        if isHovered {
-            return Color.secondary.opacity(0.12)
-        }
-
-        return Color.clear
     }
 }
