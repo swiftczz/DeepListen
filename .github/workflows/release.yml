@@ -50,21 +50,6 @@ jobs:
           files: dist/*.dmg
           generate_release_notes: true
           body: |
-            ## 安装说明
-
-            根据你的 Mac 芯片选择对应 DMG：
-
-            - **Apple Silicon（M 系列）**：`DeepListen-arm64-*.dmg`
-            - **Intel**：`DeepListen-x86_64-*.dmg`
-            - **不确定 / 通用**：`DeepListen-universal-*.dmg`（同时支持两种芯片，体积最大）
-
-            ### 关于「无法打开」提示
-
-            本应用使用 Ad-hoc 签名（无 Apple Developer 账号），首次打开会被 macOS Gatekeeper 拦截。请任选一种方式放行：
-
-            - 右键 app →「打开」→ 弹窗中点「打开」
-            - 系统设置 → 隐私与安全性 → 拉到底点「仍要打开」
-            - 终端执行：`xattr -dr com.apple.quarantine /Applications/DeepListen.app`
 
       - name: Upload DMGs as workflow artifacts
         if: steps.ver.outputs.is_tag == 'false'
