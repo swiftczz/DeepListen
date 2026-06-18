@@ -55,7 +55,7 @@ struct SidebarView: View {
                             )
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                player.selectTrack(track.id, autoplay: false)
+                                player.selectTrack(track.id, autoplay: true)
                             }
                             .contextMenu {
                                 Button {
