@@ -111,13 +111,23 @@ create_dmg() {
   local arch="$1"
   local dmg_path="$DIST_DIR/${APP_NAME}-${arch}-${APP_VERSION}.dmg"
   rm -f "$dmg_path"
+
+  # 临时目录：包含 app + Applications 符号链接，支持拖拽安装
+  local staging_dir
+  staging_dir="$(mktemp -d)"
+  trap 'rm -rf "${staging_dir:-}"' RETURN
+  cp -R "$APP_BUNDLE" "$staging_dir/"
+  ln -s /Applications "$staging_dir/Applications"
+
   hdiutil create \
     -volname "$APP_NAME" \
-    -srcfolder "$APP_BUNDLE" \
+    -srcfolder "$staging_dir" \
     -fs HFS+ \
     -format UDZO \
     -imagekey zlib-level=9 \
     "$dmg_path" >/dev/null
+  trap - RETURN
+  rm -rf "$staging_dir"
   echo "$dmg_path"
 }
 
