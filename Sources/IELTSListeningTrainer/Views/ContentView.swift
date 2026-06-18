@@ -7,7 +7,7 @@ struct ContentView: View {
     @State private var showsMediaImporter = false
     @State private var showsThemePopover = false
 
-    private let sidebarAutoHideWidth: CGFloat = 1080
+    private let sidebarAutoHideWidth: CGFloat = 820
 
     private var theme: AppThemeColor {
         AppThemeColor(storedValue: storedTheme)
@@ -29,7 +29,7 @@ struct ContentView: View {
             PlayerDetailView(theme: theme)
         }
         .navigationTitle("IELTS Listening Trainer")
-        .frame(minWidth: 960, minHeight: 640)
+        .frame(minWidth: 800, minHeight: 640)
         .tint(theme.color)
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width
