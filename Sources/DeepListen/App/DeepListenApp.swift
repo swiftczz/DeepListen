@@ -1,11 +1,11 @@
 import SwiftUI
 
 @main
-struct IELTSListeningTrainerApp: App {
+struct DeepListenApp: App {
     @State private var player = PlayerStore()
 
     var body: some Scene {
-        WindowGroup("IELTS Listening Trainer") {
+        WindowGroup("DeepListen") {
             ContentView()
                 .environment(player)
                 .onOpenURL { url in

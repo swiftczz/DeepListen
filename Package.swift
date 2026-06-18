@@ -3,17 +3,17 @@
 import PackageDescription
 
 let package = Package(
-    name: "IELTSListeningTrainer",
+    name: "DeepListen",
     platforms: [
         .macOS("26.0")
     ],
     products: [
-        .executable(name: "IELTSListeningTrainer", targets: ["IELTSListeningTrainer"])
+        .executable(name: "DeepListen", targets: ["DeepListen"])
     ],
     targets: [
         .executableTarget(
-            name: "IELTSListeningTrainer",
-            path: "Sources/IELTSListeningTrainer"
+            name: "DeepListen",
+            path: "Sources/DeepListen"
         )
     ]
 )

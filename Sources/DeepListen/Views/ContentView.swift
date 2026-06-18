@@ -28,7 +28,7 @@ struct ContentView: View {
         } detail: {
             PlayerDetailView(theme: theme)
         }
-        .navigationTitle("IELTS Listening Trainer")
+        .navigationTitle("DeepListen")
         .frame(minWidth: 800, minHeight: 640)
         .tint(theme.color)
         .onGeometryChange(for: CGFloat.self) { proxy in
