@@ -7,18 +7,23 @@ struct PlayerDetailView: View {
     var body: some View {
         Group {
             if let track = player.selectedTrack {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 32) {
-                        HeaderView(track: track, index: (player.selectedIndex ?? 0) + 1, theme: theme)
-                        TransportBarView(theme: theme)
-                        ABLoopView(theme: theme)
-                        SubtitleView(theme: theme)
+                GeometryReader { proxy in
+                    let horizontalPadding = proxy.size.width < 720 ? 24.0 : 42.0
+
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 32) {
+                            HeaderView(track: track, index: (player.selectedIndex ?? 0) + 1, theme: theme)
+                            TransportBarView(theme: theme)
+                            ABLoopView(theme: theme)
+                            SubtitleView(theme: theme)
+                        }
+                        .frame(maxWidth: 1120, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, horizontalPadding)
+                        .padding(.vertical, 42)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 42)
-                    .padding(.vertical, 42)
+                    .background(.background)
                 }
-                .background(.background)
             } else {
                 ContentUnavailableView(
                     "暂无听力音频",
@@ -75,25 +80,56 @@ private struct TransportBarView: View {
     var body: some View {
         @Bindable var player = player
 
-        HStack(spacing: 14) {
-            ABTimelineSlider(
-                value: $player.seekTime,
-                duration: max(player.duration, 1),
-                loopStart: player.loopStart,
-                loopEnd: player.loopEnd,
-                theme: theme
-            )
-            .frame(minWidth: 240)
-            .frame(height: 46)
-            .offset(y: 13)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 14) {
+                timeline
+                remainingTimeLabel
+                playbackOptions
+                transportButtons
+            }
 
-            Text(remainingTime.formattedPlaybackTime)
-                .monospacedDigit()
-                .font(.headline)
-                .foregroundStyle(.secondary)
-                .frame(width: 56, alignment: .trailing)
-                .help("剩余时间")
+            VStack(alignment: .leading, spacing: 12) {
+                timeline
+                    .frame(maxWidth: .infinity)
 
+                HStack(spacing: 14) {
+                    remainingTimeLabel
+                    Spacer(minLength: 0)
+                    playbackOptions
+                    transportButtons
+                }
+            }
+        }
+    }
+
+    private var timeline: some View {
+        @Bindable var player = player
+
+        return ABTimelineSlider(
+            value: $player.seekTime,
+            duration: max(player.duration, 1),
+            loopStart: player.loopStart,
+            loopEnd: player.loopEnd,
+            theme: theme
+        )
+        .frame(minWidth: 240)
+        .frame(height: 46)
+        .offset(y: 13)
+    }
+
+    private var remainingTimeLabel: some View {
+        Text(remainingTime.formattedPlaybackTime)
+            .monospacedDigit()
+            .font(.headline)
+            .foregroundStyle(.secondary)
+            .frame(width: 56, alignment: .trailing)
+            .help("剩余时间")
+    }
+
+    private var playbackOptions: some View {
+        @Bindable var player = player
+
+        return HStack(spacing: 14) {
             IconButton(systemImage: player.playbackMode.systemImage, theme: theme, isProminent: false) {
                 player.togglePlaybackMode()
             }
@@ -106,25 +142,28 @@ private struct TransportBarView: View {
             .popover(isPresented: $showsSpeedPopover, arrowEdge: .bottom) {
                 SpeedPopover(rateBinding: $player.playbackRateSelection, rate: player.playbackRate, theme: theme)
             }
-
-            HStack(spacing: 10) {
-                IconButton(systemImage: "gobackward.5", theme: theme, isProminent: false) {
-                    player.skip(by: -5)
-                }
-                .help("后退 5 秒")
-
-                IconButton(systemImage: player.isPlaying ? "pause.fill" : "play.fill", theme: theme, isProminent: true) {
-                    player.togglePlayPause()
-                }
-                .help(player.isPlaying ? "暂停" : "播放")
-
-                IconButton(systemImage: "goforward.5", theme: theme, isProminent: false) {
-                    player.skip(by: 5)
-                }
-                .help("前进 5 秒")
-            }
-            .fixedSize()
         }
+        .fixedSize()
+    }
+
+    private var transportButtons: some View {
+        HStack(spacing: 10) {
+            IconButton(systemImage: "gobackward.5", theme: theme, isProminent: false) {
+                player.skip(by: -5)
+            }
+            .help("后退 5 秒")
+
+            IconButton(systemImage: player.isPlaying ? "pause.fill" : "play.fill", theme: theme, isProminent: true) {
+                player.togglePlayPause()
+            }
+            .help(player.isPlaying ? "暂停" : "播放")
+
+            IconButton(systemImage: "goforward.5", theme: theme, isProminent: false) {
+                player.skip(by: 5)
+            }
+            .help("前进 5 秒")
+        }
+        .fixedSize()
     }
 
 }
@@ -322,29 +361,13 @@ private struct SubtitleView: View {
     var body: some View {
         @Bindable var player = player
         VStack(alignment: .leading, spacing: 22) {
-            HStack(spacing: 12) {
-                Label("字幕", systemImage: "captions.bubble")
-                    .font(.headline)
+            ViewThatFits(in: .horizontal) {
+                subtitleControls
 
-                Spacer()
-
-                if player.showSubtitles, !player.subtitleCues.isEmpty {
-                    Picker("字幕模式", selection: $displayMode) {
-                        ForEach(SubtitleDisplayMode.allCases) { mode in
-                            Text(mode.title).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .frame(width: 150)
+                VStack(alignment: .leading, spacing: 12) {
+                    subtitleTitle
+                    subtitleControlsGroup
                 }
-
-                Toggle("显示", isOn: $player.showSubtitles)
-                    .toggleStyle(.switch)
-
-                Toggle("上下文", isOn: $player.showSubtitleContext)
-                    .toggleStyle(.switch)
-                    .disabled(!player.showSubtitles || displayMode == .transcript)
             }
 
             if !player.showSubtitles {
@@ -384,6 +407,46 @@ private struct SubtitleView: View {
                 .textSelection(.enabled)
             }
         }
+    }
+
+    private var subtitleControls: some View {
+        HStack(spacing: 12) {
+            subtitleTitle
+
+            Spacer()
+
+            subtitleControlsGroup
+        }
+    }
+
+    private var subtitleTitle: some View {
+        Label("字幕", systemImage: "captions.bubble")
+            .font(.headline)
+    }
+
+    private var subtitleControlsGroup: some View {
+        @Bindable var player = player
+
+        return HStack(spacing: 12) {
+            if player.showSubtitles, !player.subtitleCues.isEmpty {
+                Picker("字幕模式", selection: $displayMode) {
+                    ForEach(SubtitleDisplayMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 150)
+            }
+
+            Toggle("显示", isOn: $player.showSubtitles)
+                .toggleStyle(.switch)
+
+            Toggle("上下文", isOn: $player.showSubtitleContext)
+                .toggleStyle(.switch)
+                .disabled(!player.showSubtitles || displayMode == .transcript)
+        }
+        .fixedSize()
     }
 
     private var transcriptView: some View {

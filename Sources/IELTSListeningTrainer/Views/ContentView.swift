@@ -7,6 +7,8 @@ struct ContentView: View {
     @State private var showsMediaImporter = false
     @State private var showsThemePopover = false
 
+    private let sidebarAutoHideWidth: CGFloat = 1080
+
     private var theme: AppThemeColor {
         AppThemeColor(storedValue: storedTheme)
     }
@@ -29,6 +31,11 @@ struct ContentView: View {
         .navigationTitle("IELTS Listening Trainer")
         .frame(minWidth: 960, minHeight: 640)
         .tint(theme.color)
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { _, width in
+            updateColumnVisibility(for: width)
+        }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
@@ -72,5 +79,12 @@ struct ContentView: View {
             }
         }
         .animation(.easeOut(duration: 0.18), value: player.libraryNotice)
+    }
+
+    private func updateColumnVisibility(for width: CGFloat) {
+        let targetVisibility: NavigationSplitViewVisibility =
+            width < sidebarAutoHideWidth ? .detailOnly : .all
+        guard columnVisibility != targetVisibility else { return }
+        columnVisibility = targetVisibility
     }
 }

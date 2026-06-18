@@ -14,12 +14,7 @@ APP_MACOS="$APP_CONTENTS/MacOS"
 APP_RESOURCES="$APP_CONTENTS/Resources"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
-DEFAULT_AUDIO_DIR="$ROOT_DIR/备考资料/官方材料/音频"
 ICON_SOURCE="$ROOT_DIR/Resources/AppIcon.icns"
-
-if [[ ! -d "$DEFAULT_AUDIO_DIR" ]]; then
-  DEFAULT_AUDIO_DIR="$(cd "$ROOT_DIR/.." && pwd)/备考资料/官方材料/音频"
-fi
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 
@@ -33,11 +28,6 @@ chmod +x "$APP_BINARY"
 
 if [[ -f "$ICON_SOURCE" ]]; then
   cp "$ICON_SOURCE" "$APP_RESOURCES/AppIcon.icns"
-fi
-
-if [[ -d "$DEFAULT_AUDIO_DIR" ]]; then
-  mkdir -p "$APP_RESOURCES/DefaultAudio"
-  rsync -a --delete --exclude='音频说明.md' "$DEFAULT_AUDIO_DIR/" "$APP_RESOURCES/DefaultAudio/"
 fi
 
 cat >"$INFO_PLIST" <<PLIST
