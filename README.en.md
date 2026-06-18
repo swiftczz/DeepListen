@@ -97,6 +97,36 @@ To compile without packaging:
 swift build
 ```
 
+### Building a DMG (Ad-hoc signed)
+
+`build_and_run.sh` also supports a build-only mode that produces an Ad-hoc signed `DeepListen.app` and DMG, for CI or local packaging:
+
+```bash
+APP_VERSION=0.1.0 ./script/build_and_run.sh --build-only universal --sign --dmg
+APP_VERSION=0.1.0 ./script/build_and_run.sh --build-only arm64     --sign --dmg
+APP_VERSION=0.1.0 ./script/build_and_run.sh --build-only x86_64    --sign --dmg
+```
+
+- `--build-only <arch>`: `universal` / `arm64` / `x86_64`, release configuration
+- `--sign`: Ad-hoc signing (`codesign -s -`)
+- `--dmg`: produces `DeepListen-<arch>-<version>.dmg` in `dist/`
+- `APP_VERSION`: written into `Info.plist` and the DMG filename, defaults to `0.1.0`
+
+> ⚠️ Ad-hoc signed apps are blocked by macOS Gatekeeper on first open. To bypass: right-click the app → "Open", or run `xattr -dr com.apple.quarantine /Applications/DeepListen.app` in Terminal.
+
+## Automated Release
+
+Pushing a `v*` tag to GitHub triggers [GitHub Actions](.github/workflows/release.yml) to build and publish automatically:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The workflow builds three architecture DMGs (universal / arm64 / x86_64) on a `macos-26` runner, Ad-hoc signs them, creates a GitHub Release, and attaches the DMGs. The version is derived from the tag.
+
+You can also trigger it manually from **Actions → Release → Run workflow** for verification; in that case the DMGs are uploaded as workflow artifacts instead of creating a Release.
+
 ## Default Audio Directory
 
 On launch, if the library is empty the app tries to auto-load default audio from:
@@ -118,10 +148,13 @@ If found, playable media inside is imported automatically.
 ```
 DeepListen/
 ├── Package.swift
+├── .github/
+│   └── workflows/
+│       └── release.yml     # tag-triggered DMG build + Release
 ├── Resources/
 │   └── AppIcon.icns
 ├── script/
-│   └── build_and_run.sh
+│   └── build_and_run.sh    # local run / CI DMG packaging
 └── Sources/DeepListen/
     ├── App/            # @main entry and menu commands
     ├── Models/         # track, subtitle, playback mode, theme color

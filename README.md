@@ -97,6 +97,36 @@
 swift build
 ```
 
+### 打包 DMG（Ad-hoc 签名）
+
+`build_and_run.sh` 还支持纯构建模式，产出 Ad-hoc 签名的 `DeepListen.app` 和 DMG，供 CI 或本地出包：
+
+```bash
+APP_VERSION=0.1.0 ./script/build_and_run.sh --build-only universal --sign --dmg
+APP_VERSION=0.1.0 ./script/build_and_run.sh --build-only arm64     --sign --dmg
+APP_VERSION=0.1.0 ./script/build_and_run.sh --build-only x86_64    --sign --dmg
+```
+
+- `--build-only <arch>`：`universal` / `arm64` / `x86_64`，release 配置
+- `--sign`：Ad-hoc 签名（`codesign -s -`）
+- `--dmg`：在 `dist/` 产出 `DeepListen-<arch>-<version>.dmg`
+- `APP_VERSION`：写入 `Info.plist` 与 DMG 文件名，默认 `0.1.0`
+
+> ⚠️ Ad-hoc 签名的 app 首次打开会被 macOS Gatekeeper 拦截。放行方式：右键 app →「打开」，或终端执行 `xattr -dr com.apple.quarantine /Applications/DeepListen.app`。
+
+## 自动发布
+
+推送到 GitHub 的 `v*` tag 会触发 [GitHub Actions](.github/workflows/release.yml) 自动构建并发布：
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+workflow 会在 `macos-26` runner 上构建三个架构的 DMG（universal / arm64 / x86_64），Ad-hoc 签名，创建 GitHub Release 并附挂这三个 DMG，版本号取自 tag。
+
+也可在仓库的 **Actions → Release → Run workflow** 手动触发进行验证，此时 DMG 作为 workflow artifact 下载，不发 Release。
+
 ## 默认音频目录
 
 应用启动时若媒体库为空，会尝试自动加载默认音频：
@@ -118,10 +148,13 @@ swift build
 ```
 DeepListen/
 ├── Package.swift
+├── .github/
+│   └── workflows/
+│       └── release.yml     # tag 触发自动构建 DMG 并发 Release
 ├── Resources/
 │   └── AppIcon.icns
 ├── script/
-│   └── build_and_run.sh
+│   └── build_and_run.sh    # 本地运行 / CI 打包 DMG
 └── Sources/DeepListen/
     ├── App/            # @main 入口与菜单命令
     ├── Models/         # 音轨、字幕、播放模式、主题色

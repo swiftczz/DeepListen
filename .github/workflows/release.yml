@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (without leading v), e.g. 0.1.0'
+        required: true
+        default: '0.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Derive version
+        id: ver
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "is_tag=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            echo "is_tag=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build universal DMG
+        run: APP_VERSION=${{ steps.ver.outputs.version }} ./script/build_and_run.sh --build-only universal --sign --dmg
+
+      - name: Build arm64 DMG
+        run: APP_VERSION=${{ steps.ver.outputs.version }} ./script/build_and_run.sh --build-only arm64 --sign --dmg
+
+      - name: Build x86_64 DMG
+        run: APP_VERSION=${{ steps.ver.outputs.version }} ./script/build_and_run.sh --build-only x86_64 --sign --dmg
+
+      - name: List DMGs
+        run: ls -lh dist/*.dmg
+
+      - name: Upload DMGs to Release
+        if: steps.ver.outputs.is_tag == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.dmg
+          generate_release_notes: true
+          body: |
+            ## 安装说明
+
+            根据你的 Mac 芯片选择对应 DMG：
+
+            - **Apple Silicon（M 系列）**：`DeepListen-arm64-*.dmg`
+            - **Intel**：`DeepListen-x86_64-*.dmg`
+            - **不确定 / 通用**：`DeepListen-universal-*.dmg`（同时支持两种芯片，体积最大）
+
+            ### 关于「无法打开」提示
+
+            本应用使用 Ad-hoc 签名（无 Apple Developer 账号），首次打开会被 macOS Gatekeeper 拦截。请任选一种方式放行：
+
+            - 右键 app →「打开」→ 弹窗中点「打开」
+            - 系统设置 → 隐私与安全性 → 拉到底点「仍要打开」
+            - 终端执行：`xattr -dr com.apple.quarantine /Applications/DeepListen.app`
+
+      - name: Upload DMGs as workflow artifacts
+        if: steps.ver.outputs.is_tag == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeepListen-DMGs-${{ steps.ver.outputs.version }}
+          path: dist/*.dmg
