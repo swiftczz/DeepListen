@@ -2,9 +2,10 @@ import AppKit
 import AVFoundation
 import Combine
 import Foundation
+import UniformTypeIdentifiers
 
 @MainActor
-final class PlayerStore: NSObject, ObservableObject {
+final class PlayerStore: ObservableObject {
     @Published private(set) var tracks: [ListeningTrack] = []
     @Published var selectedTrackID: ListeningTrack.ID?
     @Published private(set) var isPlaying = false
@@ -37,6 +38,16 @@ final class PlayerStore: NSObject, ObservableObject {
     private var timeObserver: Any?
     private var cancellables = Set<AnyCancellable>()
 
+    private static let playableMediaExtensions = [
+        "mp3", "m4a", "aac", "wav", "aiff", "aif", "caf", "flac",
+        "mp4", "m4v", "mov", "avi", "mkv"
+    ]
+    private static let playableMediaExtensionSet = Set(playableMediaExtensions)
+    private static let playableMediaContentTypes = playableMediaExtensions.compactMap {
+        UTType(filenameExtension: $0)
+    }
+    static let importableContentTypes = playableMediaContentTypes + [.folder]
+
     private enum Keys {
         static let storedTracks = "libraryTracks"
         static let selectedTrackID = "selectedTrackID"
@@ -51,10 +62,8 @@ final class PlayerStore: NSObject, ObservableObject {
         var path: String
     }
 
-    override init() {
-        super.init()
+    init() {
         configurePlayer()
-        configureOpenFileHandling()
         loadPersistedLibrary()
 
         if tracks.isEmpty {
@@ -329,11 +338,7 @@ final class PlayerStore: NSObject, ObservableObject {
     }
 
     static func isPlayableMediaURL(_ url: URL) -> Bool {
-        let playableExtensions: Set<String> = [
-            "mp3", "m4a", "aac", "wav", "aiff", "aif", "caf", "flac",
-            "mp4", "m4v", "mov", "avi", "mkv"
-        ]
-        return playableExtensions.contains(url.pathExtension.lowercased())
+        playableMediaExtensionSet.contains(url.pathExtension.lowercased())
     }
 
     private func configurePlayer() {
@@ -355,22 +360,6 @@ final class PlayerStore: NSObject, ObservableObject {
                 }
             }
             .store(in: &cancellables)
-    }
-
-    private func configureOpenFileHandling() {
-        NotificationCenter.default.publisher(for: .didReceiveMediaURLs)
-            .compactMap { $0.object as? [URL] }
-            .sink { [weak self] urls in
-                Task { @MainActor in
-                    self?.openExternalURLs(urls)
-                }
-            }
-            .store(in: &cancellables)
-
-        let pendingURLs = OpenFileCoordinator.shared.drainPendingURLs()
-        if !pendingURLs.isEmpty {
-            openExternalURLs(pendingURLs)
-        }
     }
 
     private func showLibraryNotice(_ message: String) {

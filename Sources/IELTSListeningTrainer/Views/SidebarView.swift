@@ -3,10 +3,7 @@ import SwiftUI
 struct SidebarView: View {
     @EnvironmentObject private var player: PlayerStore
     @State private var searchText = ""
-
-    private var theme: Color {
-        .accentColor
-    }
+    var theme: AppThemeColor
 
     private var visibleTracks: [(index: Int, track: ListeningTrack)] {
         Array(player.tracks.enumerated()).compactMap { index, track in
@@ -86,7 +83,7 @@ struct SidebarView: View {
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                                     .fill(
                                         player.selectedTrackID == track.id
-                                            ? theme : Color.clear
+                                            ? theme.color : Color.clear
                                     )
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
@@ -104,14 +101,14 @@ private struct TrackRow: View {
     var track: ListeningTrack
     var index: Int
     var isSelected: Bool
-    var theme: Color
+    var theme: AppThemeColor
 
     var body: some View {
         HStack(spacing: 12) {
             Text(String(format: "%02d", index))
                 .font(.system(.callout, design: .rounded).weight(.bold))
                 .monospacedDigit()
-                .foregroundStyle(isSelected ? .white : .secondary)
+                .foregroundStyle(isSelected ? theme.selectionForegroundColor : Color.secondary)
                 .frame(width: 38, height: 30)
                 .background(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -124,14 +121,14 @@ private struct TrackRow: View {
                     .font(.body)
                     .fontWeight(.regular)
                     .lineLimit(1)
-                    .foregroundStyle(isSelected ? .white : .primary)
+                    .foregroundStyle(isSelected ? theme.selectionForegroundColor : Color.primary)
 
                 HStack(spacing: 6) {
                     Text((track.duration ?? 0).formattedPlaybackTime)
                     Text(track.mediaKind.label)
                 }
                 .font(.caption2)
-                .foregroundStyle(isSelected ? Color.white.opacity(0.78) : .secondary)
+                .foregroundStyle(isSelected ? theme.selectionForegroundColor.opacity(0.78) : Color.secondary)
             }
 
             Spacer(minLength: 0)

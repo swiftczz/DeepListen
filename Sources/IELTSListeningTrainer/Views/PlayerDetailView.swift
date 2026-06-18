@@ -2,10 +2,7 @@ import SwiftUI
 
 struct PlayerDetailView: View {
     @EnvironmentObject private var player: PlayerStore
-
-    private var theme: Color {
-        .accentColor
-    }
+    var theme: AppThemeColor
 
     var body: some View {
         Group {
@@ -36,13 +33,13 @@ struct PlayerDetailView: View {
 private struct HeaderView: View {
     var track: ListeningTrack
     var index: Int
-    var theme: Color
+    var theme: AppThemeColor
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 22) {
             Text(String(format: "%02d", index))
                 .font(.system(size: 34, weight: .bold, design: .rounded))
-                .foregroundStyle(theme)
+                .foregroundStyle(theme.color)
                 .frame(width: 78, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 12) {
@@ -69,7 +66,7 @@ private struct TransportBarView: View {
     @EnvironmentObject private var player: PlayerStore
     @State private var showsSpeedPopover = false
 
-    var theme: Color
+    var theme: AppThemeColor
 
     private var seekBinding: Binding<Double> {
         Binding {
@@ -102,6 +99,7 @@ private struct TransportBarView: View {
             )
             .frame(minWidth: 240)
             .frame(height: 46)
+            .offset(y: 13)
 
             Text(remainingTime.formattedPlaybackTime)
                 .monospacedDigit()
@@ -158,13 +156,13 @@ private struct ABTimelineSlider: View {
     var duration: TimeInterval
     var loopStart: TimeInterval?
     var loopEnd: TimeInterval?
-    var theme: Color
+    var theme: AppThemeColor
 
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
                 Slider(value: $value, in: 0...duration)
-                    .tint(theme)
+                    .tint(theme.color)
 
                 if let loopStart {
                     marker(label: "A", time: loopStart, width: proxy.size.width)
@@ -190,9 +188,9 @@ private struct ABTimelineSlider: View {
         VStack(spacing: 2) {
             Text(label)
                 .font(.caption2.weight(.bold))
-                .foregroundStyle(theme)
+                .foregroundStyle(theme.color)
             Capsule()
-                .fill(theme)
+                .fill(theme.color)
                 .frame(width: 3, height: 14)
         }
         .offset(x: min(max(position(for: time, width: width) - 7, 0), width - 14), y: -3)
@@ -204,7 +202,7 @@ private struct ABTimelineSlider: View {
         let endX = position(for: end, width: width)
 
         return Capsule()
-            .fill(theme.opacity(0.28))
+            .fill(theme.color.opacity(0.28))
             .frame(width: max(endX - startX, 0), height: 5)
             .offset(x: startX, y: 22)
             .allowsHitTesting(false)
@@ -214,16 +212,16 @@ private struct ABTimelineSlider: View {
 private struct SpeedPopover: View {
     var rateBinding: Binding<Double>
     var rate: Double
-    var theme: Color
+    var theme: AppThemeColor
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(String(format: "%.2fx", rate))
                 .font(.title3.monospacedDigit().weight(.semibold))
-                .foregroundStyle(theme)
+                .foregroundStyle(theme.color)
 
             Slider(value: rateBinding, in: 0.25...2.0, step: 0.25)
-                .tint(theme)
+                .tint(theme.color)
                 .frame(width: 220)
 
             HStack {
@@ -240,7 +238,7 @@ private struct SpeedPopover: View {
 
 private struct IconButton: View {
     var systemImage: String
-    var theme: Color
+    var theme: AppThemeColor
     var isProminent: Bool
     var action: () -> Void
 
@@ -248,11 +246,11 @@ private struct IconButton: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(isProminent ? .white : .secondary)
+                .foregroundStyle(isProminent ? theme.selectionForegroundColor : Color.secondary)
                 .frame(width: 46, height: 46)
                 .background(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(isProminent ? theme : Color.secondary.opacity(0.10))
+                        .fill(isProminent ? theme.color : Color.secondary.opacity(0.10))
                 )
         }
         .buttonStyle(.plain)
@@ -261,7 +259,7 @@ private struct IconButton: View {
 
 private struct ABLoopView: View {
     @EnvironmentObject private var player: PlayerStore
-    var theme: Color
+    var theme: AppThemeColor
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -322,7 +320,7 @@ private struct ABLoopView: View {
     private func loopMarkers(loopStart: TimeInterval) -> some View {
         HStack(spacing: 10) {
             Capsule()
-                .fill(theme)
+                .fill(theme.color)
                 .frame(width: 22, height: 6)
 
             Text("A \(loopStart.formattedPlaybackTime)")
@@ -341,7 +339,7 @@ private struct ABLoopView: View {
 private struct SubtitleView: View {
     @EnvironmentObject private var player: PlayerStore
     @State private var displayMode: SubtitleDisplayMode = .current
-    var theme: Color
+    var theme: AppThemeColor
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -394,7 +392,7 @@ private struct SubtitleView: View {
 
                     Text(player.currentSubtitle?.text ?? player.nextSubtitle?.text ?? " ")
                         .font(.system(size: 28, weight: .semibold, design: .rounded))
-                        .foregroundStyle(player.currentSubtitle == nil ? .secondary : theme)
+                        .foregroundStyle(player.currentSubtitle == nil ? Color.secondary : theme.color)
                         .lineSpacing(8)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -423,7 +421,7 @@ private struct SubtitleView: View {
 
                         Text(cue.text)
                             .font(.body)
-                            .foregroundStyle(isCurrent(cue) ? theme : .primary)
+                            .foregroundStyle(isCurrent(cue) ? theme.color : Color.primary)
                             .lineLimit(nil)
                             .multilineTextAlignment(.leading)
 
@@ -433,7 +431,7 @@ private struct SubtitleView: View {
                     .padding(.vertical, 9)
                     .background(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(isCurrent(cue) ? theme.opacity(0.10) : Color.clear)
+                            .fill(isCurrent(cue) ? theme.color.opacity(0.10) : Color.clear)
                     )
                 }
                 .buttonStyle(.plain)
