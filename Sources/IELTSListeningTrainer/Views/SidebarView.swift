@@ -136,6 +136,6 @@ private struct TrackRow: View {
 
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
     }
 }
