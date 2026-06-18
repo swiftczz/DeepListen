@@ -1,5 +1,4 @@
 import AVFoundation
-import AppKit
 import Foundation
 import Observation
 import UniformTypeIdentifiers
@@ -36,6 +35,7 @@ import UniformTypeIdentifiers
     var loopEnd: TimeInterval?
 
     @ObservationIgnored private let player = AVPlayer()
+    @ObservationIgnored private let fileRevealer: FileRevealing
 
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var playbackFinishedTask: Task<Void, Never>?
@@ -67,7 +67,9 @@ import UniformTypeIdentifiers
         var path: String
     }
 
-    init() {
+    init(fileRevealer: FileRevealing = MacFileRevealer()) {
+        self.fileRevealer = fileRevealer
+
         configurePlayer()
         loadPersistedLibrary()
 
@@ -96,10 +98,15 @@ import UniformTypeIdentifiers
     }
 
     var selectedTrack: ListeningTrack? {
-        tracks.first { $0.id == selectedTrackID }
+        guard let selectedTrackIndex else { return nil }
+        return tracks[selectedTrackIndex]
     }
 
     var selectedIndex: Int? {
+        selectedTrackIndex
+    }
+
+    private var selectedTrackIndex: Int? {
         guard let selectedTrackID else { return nil }
         return tracks.firstIndex { $0.id == selectedTrackID }
     }
@@ -163,10 +170,7 @@ import UniformTypeIdentifiers
 
         var firstTargetID: UUID?
         var addedTracks: [ListeningTrack] = []
-        var knownMediaIDsByKey: [String: ListeningTrack.ID] = [:]
-        for track in tracks {
-            knownMediaIDsByKey[Self.mediaIdentityKey(for: track.url)] = track.id
-        }
+        var knownMediaIDsByKey = Self.mediaIDsByKey(for: tracks)
 
         for mediaURL in mediaURLs {
             let mediaKey = Self.mediaIdentityKey(for: mediaURL)
@@ -383,7 +387,7 @@ import UniformTypeIdentifiers
     }
 
     func revealInFinder(_ track: ListeningTrack) {
-        NSWorkspace.shared.activateFileViewerSelecting([track.url])
+        fileRevealer.revealInFinder(track.url)
     }
 
     static func isPlayableMediaURL(_ url: URL) -> Bool {
@@ -576,18 +580,15 @@ import UniformTypeIdentifiers
             return
         }
 
-        var knownMediaKeys = Set<String>()
-        tracks = storedTracks.compactMap { storedTrack in
+        tracks = Self.deduplicatedTracks(storedTracks.compactMap { storedTrack in
             let url = URL(filePath: storedTrack.path)
             guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)),
                 Self.isPlayableMediaURL(url)
             else {
                 return nil
             }
-            let mediaKey = Self.mediaIdentityKey(for: url)
-            guard knownMediaKeys.insert(mediaKey).inserted else { return nil }
             return ListeningTrack(url: url, id: storedTrack.id)
-        }
+        })
 
         if let selectedIDString = UserDefaults.standard.string(forKey: Keys.selectedTrackID),
             let selectedID = UUID(uuidString: selectedIDString),
@@ -623,11 +624,7 @@ import UniformTypeIdentifiers
     private func addDefaultAudioIfAvailable() {
         guard
             let defaultAudioDirectory = Self.defaultAudioDirectories().first(where: {
-                directoryURL in
-                var isDirectory: ObjCBool = false
-                return FileManager.default.fileExists(
-                    atPath: directoryURL.path(percentEncoded: false), isDirectory: &isDirectory)
-                    && isDirectory.boolValue
+                Self.isDirectory($0)
             })
         else {
             return
@@ -710,6 +707,28 @@ import UniformTypeIdentifiers
     private static func mediaIdentityKey(for url: URL) -> String {
         let fileSize = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? -1
         return "\(url.lastPathComponent.lowercased())#\(fileSize)"
+    }
+
+    private static func mediaIDsByKey(for tracks: [ListeningTrack]) -> [String: ListeningTrack.ID] {
+        Dictionary(
+            tracks.map { (mediaIdentityKey(for: $0.url), $0.id) },
+            uniquingKeysWith: { firstID, _ in firstID }
+        )
+    }
+
+    private static func deduplicatedTracks(_ tracks: [ListeningTrack]) -> [ListeningTrack] {
+        var knownMediaKeys = Set<String>()
+        return tracks.filter { track in
+            knownMediaKeys.insert(mediaIdentityKey(for: track.url)).inserted
+        }
+    }
+
+    private static func isDirectory(_ url: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(
+            atPath: url.path(percentEncoded: false),
+            isDirectory: &isDirectory
+        ) && isDirectory.boolValue
     }
 
     private static func defaultAudioDirectories() -> [URL] {
