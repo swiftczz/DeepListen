@@ -29,7 +29,9 @@ struct ContentView: View {
                 .buttonStyle(TitleBarActionButtonStyle())
                 .help("添加文件或目录")
 
-                SettingsLink {
+                Button {
+                    NotificationCenter.default.post(name: .didRequestSettingsWindow, object: nil)
+                } label: {
                     TitleBarIcon(systemImage: "gearshape")
                 }
                 .buttonStyle(TitleBarActionButtonStyle())
@@ -39,6 +41,20 @@ struct ContentView: View {
             .padding(.trailing, 40)
             .offset(y: -52)
         }
+        .overlay(alignment: .top) {
+            if let libraryNotice = player.libraryNotice {
+                Label(libraryNotice, systemImage: "checkmark.circle.fill")
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(.regularMaterial, in: Capsule())
+                    .shadow(color: .black.opacity(0.12), radius: 14, y: 6)
+                    .padding(.top, 18)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeOut(duration: 0.18), value: player.libraryNotice)
     }
 }
 

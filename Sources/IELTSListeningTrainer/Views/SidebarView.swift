@@ -3,9 +3,20 @@ import SwiftUI
 struct SidebarView: View {
     @EnvironmentObject private var player: PlayerStore
     @AppStorage("themeColor") private var themeRawValue = ThemeColor.lime.rawValue
+    @State private var searchText = ""
 
     private var theme: ThemeColor {
         ThemeColor.color(for: themeRawValue)
+    }
+
+    private var visibleTracks: [(index: Int, track: ListeningTrack)] {
+        Array(player.tracks.enumerated()).compactMap { index, track in
+            guard !searchText.isEmpty else { return (index, track) }
+            return track.title.localizedStandardContains(searchText)
+                || track.url.lastPathComponent.localizedStandardContains(searchText)
+                ? (index, track)
+                : nil
+        }
     }
 
     var body: some View {
@@ -15,8 +26,30 @@ struct SidebarView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
+                    Section {
+                        HStack(spacing: 8) {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundStyle(.secondary)
+                            TextField("搜索音频", text: $searchText)
+                                .textFieldStyle(.plain)
+                        }
+                        .font(.callout)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+                    .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 10))
+                    .listRowBackground(Color.clear)
+
                     Section("听力音频") {
-                        ForEach(Array(player.tracks.enumerated()), id: \.element.id) {
+                        if visibleTracks.isEmpty {
+                            Text("没有匹配的音频")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                                .padding(.vertical, 10)
+                        }
+
+                        ForEach(visibleTracks, id: \.track.id) {
                             index, track in
                             TrackRow(
                                 track: track,
@@ -104,6 +137,6 @@ private struct TrackRow: View {
 
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 4)
     }
 }

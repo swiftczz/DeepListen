@@ -94,9 +94,15 @@ private struct TransportBarView: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            Slider(value: seekBinding, in: 0...max(player.duration, 1))
-                .tint(theme.color)
-                .frame(minWidth: 240)
+            ABTimelineSlider(
+                value: seekBinding,
+                duration: max(player.duration, 1),
+                loopStart: player.loopStart,
+                loopEnd: player.loopEnd,
+                theme: theme
+            )
+            .frame(minWidth: 240)
+            .frame(height: 46)
 
             Text(remainingTime.formattedPlaybackTime)
                 .monospacedDigit()
@@ -145,6 +151,64 @@ private struct TransportBarView: View {
         case .singleLoop:
             player.playbackMode = .sequence
         }
+    }
+}
+
+private struct ABTimelineSlider: View {
+    @Binding var value: Double
+    var duration: TimeInterval
+    var loopStart: TimeInterval?
+    var loopEnd: TimeInterval?
+    var theme: ThemeColor
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Slider(value: $value, in: 0...duration)
+                    .tint(theme.color)
+
+                if let loopStart {
+                    marker(label: "A", time: loopStart, width: proxy.size.width)
+                }
+
+                if let loopEnd {
+                    marker(label: "B", time: loopEnd, width: proxy.size.width)
+                }
+
+                if let loopStart, let loopEnd, loopEnd > loopStart {
+                    loopRange(start: loopStart, end: loopEnd, width: proxy.size.width)
+                }
+            }
+        }
+    }
+
+    private func position(for time: TimeInterval, width: CGFloat) -> CGFloat {
+        guard duration > 0 else { return 0 }
+        return min(max(CGFloat(time / duration) * width, 0), width)
+    }
+
+    private func marker(label: String, time: TimeInterval, width: CGFloat) -> some View {
+        VStack(spacing: 2) {
+            Text(label)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(theme.color)
+            Capsule()
+                .fill(theme.color)
+                .frame(width: 3, height: 14)
+        }
+        .offset(x: min(max(position(for: time, width: width) - 7, 0), width - 14), y: -3)
+        .allowsHitTesting(false)
+    }
+
+    private func loopRange(start: TimeInterval, end: TimeInterval, width: CGFloat) -> some View {
+        let startX = position(for: start, width: width)
+        let endX = position(for: end, width: width)
+
+        return Capsule()
+            .fill(theme.color.opacity(0.28))
+            .frame(width: max(endX - startX, 0), height: 5)
+            .offset(x: startX, y: 22)
+            .allowsHitTesting(false)
     }
 }
 
@@ -219,16 +283,16 @@ private struct ABLoopView: View {
                 loopMarkers(loopStart: loopStart)
             }
         }
-        .padding(18)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(14)
+        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private var loopSummary: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text("A/B 片段练习")
-                .font(.headline)
+                .font(.callout.weight(.semibold))
             Text(player.loopSummary)
-                .font(.title3.weight(.semibold))
+                .font(.callout)
                 .foregroundStyle(.secondary)
         }
     }
@@ -277,6 +341,7 @@ private struct ABLoopView: View {
 
 private struct SubtitleView: View {
     @EnvironmentObject private var player: PlayerStore
+    @State private var displayMode: SubtitleDisplayMode = .current
     var theme: ThemeColor
 
     var body: some View {
@@ -287,12 +352,23 @@ private struct SubtitleView: View {
 
                 Spacer()
 
-                Toggle("当前句", isOn: $player.showSubtitles)
+                if player.showSubtitles, !player.subtitleCues.isEmpty {
+                    Picker("字幕模式", selection: $displayMode) {
+                        ForEach(SubtitleDisplayMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 150)
+                }
+
+                Toggle("显示", isOn: $player.showSubtitles)
                     .toggleStyle(.switch)
 
                 Toggle("上下文", isOn: $player.showSubtitleContext)
                     .toggleStyle(.switch)
-                    .disabled(!player.showSubtitles)
+                    .disabled(!player.showSubtitles || displayMode == .transcript)
             }
 
             if !player.showSubtitles {
@@ -307,6 +383,8 @@ private struct SubtitleView: View {
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 18)
+            } else if displayMode == .transcript {
+                transcriptView
             } else {
                 VStack(alignment: .leading, spacing: 16) {
                     if player.showSubtitleContext, let previousSubtitle = player.previousSubtitle {
@@ -329,6 +407,60 @@ private struct SubtitleView: View {
                 }
                 .textSelection(.enabled)
             }
+        }
+    }
+
+    private var transcriptView: some View {
+        LazyVStack(alignment: .leading, spacing: 8) {
+            ForEach(player.subtitleCues) { cue in
+                Button {
+                    player.jumpToSubtitle(cue)
+                } label: {
+                    HStack(alignment: .top, spacing: 12) {
+                        Text(cue.start.formattedPlaybackTime)
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .frame(width: 44, alignment: .leading)
+
+                        Text(cue.text)
+                            .font(.body)
+                            .foregroundStyle(isCurrent(cue) ? theme.color : .primary)
+                            .lineLimit(nil)
+                            .multilineTextAlignment(.leading)
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(isCurrent(cue) ? theme.color.opacity(0.10) : Color.clear)
+                    )
+                }
+                .buttonStyle(.plain)
+                .help("跳转到 \(cue.start.formattedPlaybackTime)")
+            }
+        }
+        .textSelection(.enabled)
+    }
+
+    private func isCurrent(_ cue: SubtitleCue) -> Bool {
+        cue.start <= player.currentTime && player.currentTime <= cue.end
+    }
+}
+
+private enum SubtitleDisplayMode: String, CaseIterable, Identifiable {
+    case current
+    case transcript
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .current:
+            return "当前句"
+        case .transcript:
+            return "全文稿"
         }
     }
 }

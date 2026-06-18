@@ -29,6 +29,7 @@ final class PlayerStore: NSObject, ObservableObject {
     }
     @Published private(set) var subtitleCues: [SubtitleCue] = []
     @Published private(set) var currentSubtitleIndex: Int?
+    @Published var libraryNotice: String?
     @Published var loopStart: TimeInterval?
     @Published var loopEnd: TimeInterval?
 
@@ -203,7 +204,14 @@ final class PlayerStore: NSObject, ObservableObject {
     }
 
     func openExternalURLs(_ urls: [URL]) {
-        addURLs(urls, autoplayFirst: true)
+        let addedTracks = addURLs(urls, autoplayFirst: true)
+        if addedTracks.isEmpty {
+            showLibraryNotice("已切换到已存在音频")
+        } else if addedTracks.count == 1, let title = addedTracks.first?.title {
+            showLibraryNotice("已添加：\(title)")
+        } else {
+            showLibraryNotice("已添加 \(addedTracks.count) 个音频")
+        }
     }
 
     func selectTrack(_ id: ListeningTrack.ID, autoplay: Bool) {
@@ -275,6 +283,13 @@ final class PlayerStore: NSObject, ObservableObject {
 
     func skip(by seconds: TimeInterval) {
         seek(to: currentTime + seconds)
+        if isPlaying {
+            player.playImmediately(atRate: Float(playbackRate))
+        }
+    }
+
+    func jumpToSubtitle(_ cue: SubtitleCue) {
+        seek(to: cue.start)
         if isPlaying {
             player.playImmediately(atRate: Float(playbackRate))
         }
@@ -397,6 +412,18 @@ final class PlayerStore: NSObject, ObservableObject {
         let pendingURLs = OpenFileCoordinator.shared.drainPendingURLs()
         if !pendingURLs.isEmpty {
             openExternalURLs(pendingURLs)
+        }
+    }
+
+    private func showLibraryNotice(_ message: String) {
+        libraryNotice = message
+        Task {
+            try? await Task.sleep(for: .seconds(2.2))
+            await MainActor.run {
+                if self.libraryNotice == message {
+                    self.libraryNotice = nil
+                }
+            }
         }
     }
 
