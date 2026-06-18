@@ -39,6 +39,9 @@ import UniformTypeIdentifiers
 
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var playbackFinishedTask: Task<Void, Never>?
+    @ObservationIgnored private var libraryNoticeTask: Task<Void, Never>?
+    @ObservationIgnored private var subtitleLoadTask: Task<Void, Never>?
+    @ObservationIgnored private var durationLoadTasks: [ListeningTrack.ID: Task<Void, Never>] = [:]
 
     private static let playableMediaExtensions = [
         "mp3", "m4a", "aac", "wav", "aiff", "aif", "caf", "flac",
@@ -81,8 +84,15 @@ import UniformTypeIdentifiers
         }
     }
 
-    deinit {
+    isolated deinit {
         playbackFinishedTask?.cancel()
+        libraryNoticeTask?.cancel()
+        subtitleLoadTask?.cancel()
+        durationLoadTasks.values.forEach { $0.cancel() }
+
+        if let timeObserver {
+            player.removeTimeObserver(timeObserver)
+        }
     }
 
     var selectedTrack: ListeningTrack? {
@@ -382,11 +392,14 @@ import UniformTypeIdentifiers
     }
 
     private func showLibraryNotice(_ message: String) {
+        libraryNoticeTask?.cancel()
         libraryNotice = message
-        Task {
+
+        libraryNoticeTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2.2))
-            if self.libraryNotice == message {
-                self.libraryNotice = nil
+            guard !Task.isCancelled, let self else { return }
+            if libraryNotice == message {
+                libraryNotice = nil
             }
         }
     }
@@ -417,14 +430,29 @@ import UniformTypeIdentifiers
     }
 
     private func loadSubtitles(for track: ListeningTrack) {
+        subtitleLoadTask?.cancel()
+
         guard let subtitleURL = track.subtitleURL else {
             subtitleCues = []
             currentSubtitleIndex = nil
             return
         }
 
-        subtitleCues = SRTParser.parse(url: subtitleURL)
-        updateSubtitleIndex(at: currentTime)
+        subtitleCues = []
+        currentSubtitleIndex = nil
+
+        let trackID = track.id
+        subtitleLoadTask = Task.detached { [subtitleURL, trackID] in
+            let cues = SubtitleParser.parse(url: subtitleURL)
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run { [weak self] in
+                guard let self, selectedTrackID == trackID else { return }
+                subtitleCues = cues
+                updateSubtitleIndex(at: currentTime)
+                subtitleLoadTask = nil
+            }
+        }
     }
 
     private func handlePlaybackTick(_ seconds: TimeInterval) {
@@ -473,9 +501,50 @@ import UniformTypeIdentifiers
     }
 
     private func updateSubtitleIndex(at seconds: TimeInterval) {
-        currentSubtitleIndex = subtitleCues.firstIndex { cue in
-            cue.start <= seconds && seconds <= cue.end
+        guard !subtitleCues.isEmpty else {
+            currentSubtitleIndex = nil
+            return
         }
+
+        if let currentSubtitleIndex, subtitleCues.indices.contains(currentSubtitleIndex) {
+            let cue = subtitleCues[currentSubtitleIndex]
+            if cue.start <= seconds && seconds <= cue.end {
+                return
+            }
+
+            let adjacentIndex = seconds > cue.end
+                ? currentSubtitleIndex + 1
+                : currentSubtitleIndex - 1
+            if subtitleCues.indices.contains(adjacentIndex) {
+                let adjacentCue = subtitleCues[adjacentIndex]
+                if adjacentCue.start <= seconds && seconds <= adjacentCue.end {
+                    self.currentSubtitleIndex = adjacentIndex
+                    return
+                }
+            }
+        }
+
+        currentSubtitleIndex = subtitleIndex(containing: seconds)
+    }
+
+    private func subtitleIndex(containing seconds: TimeInterval) -> Int? {
+        var lowerBound = subtitleCues.startIndex
+        var upperBound = subtitleCues.endIndex
+
+        while lowerBound < upperBound {
+            let middleIndex = lowerBound + (upperBound - lowerBound) / 2
+            let cue = subtitleCues[middleIndex]
+
+            if seconds < cue.start {
+                upperBound = middleIndex
+            } else if seconds > cue.end {
+                lowerBound = middleIndex + 1
+            } else {
+                return middleIndex
+            }
+        }
+
+        return nil
     }
 
     private func loadPersistedLibrary() {
@@ -548,9 +617,18 @@ import UniformTypeIdentifiers
 
     private func refreshDurations(for tracks: [ListeningTrack]) {
         for track in tracks {
-            Task {
-                let loadedDuration = await Self.loadDuration(for: track.url)
-                self.applyDuration(loadedDuration, to: track.id)
+            let trackID = track.id
+            let trackURL = track.url
+            durationLoadTasks[trackID]?.cancel()
+            durationLoadTasks[trackID] = Task.detached { [trackID, trackURL] in
+                let loadedDuration = await Self.loadDuration(for: trackURL)
+                guard !Task.isCancelled else { return }
+
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    applyDuration(loadedDuration, to: trackID)
+                    durationLoadTasks[trackID] = nil
+                }
             }
         }
     }

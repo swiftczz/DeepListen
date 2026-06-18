@@ -1,6 +1,6 @@
 import Foundation
 
-enum SRTParser {
+enum SubtitleParser {
     static func parse(url: URL) -> [SubtitleCue] {
         guard let data = try? Data(contentsOf: url) else { return [] }
 
