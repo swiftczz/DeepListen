@@ -81,13 +81,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.minSize = NSSize(width: 960, height: 640)
         window.delegate = self
         let hostingController = NSHostingController(
-            rootView: ContentView(showSettings: { [weak self] in
-                self?.showSettingsWindow()
-            })
+            rootView: ContentView()
                 .environmentObject(playerStore)
         )
         hostingController.sizingOptions = []
         window.contentViewController = hostingController
+        attachTitleBarActions(to: window)
         if let visibleFrame = NSScreen.main?.visibleFrame {
             window.setFrame(
                 NSRect(
@@ -107,6 +106,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         mainWindow = window
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func attachTitleBarActions(to window: NSWindow) {
+        guard let frameView = window.contentView?.superview else { return }
+
+        let addButton = TitleBarIconButton(
+            systemSymbolName: "plus",
+            accessibilityLabel: "添加文件或目录",
+            target: self,
+            action: #selector(importMedia)
+        )
+        addButton.toolTip = "添加文件或目录"
+
+        let settingsButton = TitleBarIconButton(
+            systemSymbolName: "gearshape",
+            accessibilityLabel: "设置",
+            target: self,
+            action: #selector(showSettingsWindow)
+        )
+        settingsButton.toolTip = "设置"
+
+        let stackView = NSStackView(views: [addButton, settingsButton])
+        stackView.orientation = .horizontal
+        stackView.spacing = 10
+        stackView.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+
+        frameView.addSubview(stackView, positioned: .above, relativeTo: nil)
+        NSLayoutConstraint.activate([
+            stackView.topAnchor.constraint(equalTo: frameView.topAnchor, constant: 12),
+            stackView.trailingAnchor.constraint(equalTo: frameView.trailingAnchor, constant: -36)
+        ])
     }
 
     @objc func showSettingsWindow() {
@@ -320,5 +351,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         item.keyEquivalentModifierMask = modifiers
         item.target = target ?? self
         return item
+    }
+}
+
+private final class TitleBarIconButton: NSButton {
+    override var isHighlighted: Bool {
+        didSet {
+            updateAppearance()
+        }
+    }
+
+    init(systemSymbolName: String, accessibilityLabel: String, target: AnyObject?, action: Selector) {
+        super.init(frame: NSRect(x: 0, y: 0, width: 34, height: 34))
+
+        self.target = target
+        self.action = action
+        self.image = NSImage(systemSymbolName: systemSymbolName, accessibilityDescription: accessibilityLabel)
+        self.imagePosition = .imageOnly
+        self.imageScaling = .scaleProportionallyDown
+        self.contentTintColor = .secondaryLabelColor
+        self.isBordered = false
+        self.focusRingType = .none
+        self.translatesAutoresizingMaskIntoConstraints = false
+        self.wantsLayer = true
+
+        NSLayoutConstraint.activate([
+            widthAnchor.constraint(equalToConstant: 34),
+            heightAnchor.constraint(equalToConstant: 34)
+        ])
+        updateAppearance()
+    }
+
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    private func updateAppearance() {
+        guard let layer else { return }
+
+        layer.cornerRadius = 9
+        layer.backgroundColor = (
+            isHighlighted
+                ? NSColor.secondaryLabelColor.withAlphaComponent(0.18)
+                : NSColor.white.withAlphaComponent(0.96)
+        ).cgColor
+        layer.shadowColor = NSColor.black.cgColor
+        layer.shadowOpacity = isHighlighted ? 0 : 0.10
+        layer.shadowRadius = isHighlighted ? 0 : 10
+        layer.shadowOffset = NSSize(width: 0, height: -5)
     }
 }
