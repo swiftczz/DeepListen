@@ -2,12 +2,12 @@ import SwiftUI
 
 @main
 struct IELTSListeningTrainerApp: App {
-    @StateObject private var player = PlayerStore()
+    @State private var player = PlayerStore()
 
     var body: some Scene {
         WindowGroup("IELTS Listening Trainer") {
             ContentView()
-                .environmentObject(player)
+                .environment(player)
                 .onOpenURL { url in
                     player.openExternalURLs([url])
                 }

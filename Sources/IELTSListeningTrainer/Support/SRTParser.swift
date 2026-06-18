@@ -2,16 +2,18 @@ import Foundation
 
 enum SRTParser {
     static func parse(url: URL) -> [SubtitleCue] {
-        if let utf8Text = try? String(contentsOf: url, encoding: .utf8) {
-            return parse(utf8Text)
+        guard let data = try? Data(contentsOf: url) else { return [] }
+
+        if let text = String(data: data, encoding: .utf8) {
+            return parse(text)
         }
 
-        if let utf16Text = try? String(contentsOf: url, encoding: .utf16) {
-            return parse(utf16Text)
+        if let text = String(data: data, encoding: .utf16) {
+            return parse(text)
         }
 
-        if let latinText = try? String(contentsOf: url, encoding: .isoLatin1) {
-            return parse(latinText)
+        if let text = String(data: data, encoding: .isoLatin1) {
+            return parse(text)
         }
 
         return []

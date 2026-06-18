@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SidebarView: View {
-    @EnvironmentObject private var player: PlayerStore
+    @Environment(PlayerStore.self) private var player
     @State private var searchText = ""
     var theme: AppThemeColor
 

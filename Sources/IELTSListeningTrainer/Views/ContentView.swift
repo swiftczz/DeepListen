@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @EnvironmentObject private var player: PlayerStore
+    @Environment(PlayerStore.self) private var player
     @AppStorage(AppThemeColor.storageKey) private var storedTheme = AppThemeColor.defaultTheme.rawValue
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var showsMediaImporter = false

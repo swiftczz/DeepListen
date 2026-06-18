@@ -1,46 +1,47 @@
-import AppKit
 import AVFoundation
-import Combine
+import AppKit
 import Foundation
+import Observation
 import UniformTypeIdentifiers
 
 @MainActor
-final class PlayerStore: ObservableObject {
-    @Published private(set) var tracks: [ListeningTrack] = []
-    @Published var selectedTrackID: ListeningTrack.ID?
-    @Published private(set) var isPlaying = false
-    @Published var currentTime: TimeInterval = 0
-    @Published var duration: TimeInterval = 0
-    @Published private(set) var playbackRate: Double = PlayerStore.defaultPlaybackRate()
-    @Published var playbackMode: PlaybackMode = PlayerStore.defaultPlaybackMode() {
+@Observable final class PlayerStore {
+    private(set) var tracks: [ListeningTrack] = []
+    var selectedTrackID: ListeningTrack.ID?
+    private(set) var isPlaying = false
+    var currentTime: TimeInterval = 0
+    var duration: TimeInterval = 0
+    private(set) var playbackRate: Double = PlayerStore.defaultPlaybackRate()
+    var playbackMode: PlaybackMode = PlayerStore.defaultPlaybackMode() {
         didSet {
             UserDefaults.standard.set(playbackMode.rawValue, forKey: Keys.playbackMode)
         }
     }
-    @Published var showSubtitles: Bool = PlayerStore.defaultBool(Keys.showSubtitles, fallback: true) {
+    var showSubtitles: Bool = PlayerStore.defaultBool(Keys.showSubtitles, fallback: true) {
         didSet {
             UserDefaults.standard.set(showSubtitles, forKey: Keys.showSubtitles)
         }
     }
-    @Published var showSubtitleContext: Bool = PlayerStore.defaultBool(Keys.showSubtitleContext, fallback: true) {
+    var showSubtitleContext: Bool = PlayerStore.defaultBool(
+        Keys.showSubtitleContext, fallback: true)
+    {
         didSet {
             UserDefaults.standard.set(showSubtitleContext, forKey: Keys.showSubtitleContext)
         }
     }
-    @Published private(set) var subtitleCues: [SubtitleCue] = []
-    @Published private(set) var currentSubtitleIndex: Int?
-    @Published var libraryNotice: String?
-    @Published var loopStart: TimeInterval?
-    @Published var loopEnd: TimeInterval?
+    private(set) var subtitleCues: [SubtitleCue] = []
+    private(set) var currentSubtitleIndex: Int?
+    var libraryNotice: String?
+    var loopStart: TimeInterval?
+    var loopEnd: TimeInterval?
 
     let player = AVPlayer()
 
-    private var timeObserver: Any?
-    private var cancellables = Set<AnyCancellable>()
+    @ObservationIgnored private var timeObserver: Any?
 
     private static let playableMediaExtensions = [
         "mp3", "m4a", "aac", "wav", "aiff", "aif", "caf", "flac",
-        "mp4", "m4v", "mov", "avi", "mkv"
+        "mp4", "m4v", "mov", "avi", "mkv",
     ]
     private static let playableMediaExtensionSet = Set(playableMediaExtensions)
     private static let playableMediaContentTypes = playableMediaExtensions.compactMap {
@@ -113,9 +114,9 @@ final class PlayerStore: ObservableObject {
 
     var loopSummary: String {
         switch (loopStart, loopEnd) {
-        case let (start?, end?) where end > start:
+        case (let start?, let end?) where end > start:
             return "\(start.formattedPlaybackTime) - \(end.formattedPlaybackTime)"
-        case let (start?, _):
+        case (let start?, _):
             return "A \(start.formattedPlaybackTime) 已设置"
         default:
             return "片段未设置"
@@ -134,7 +135,9 @@ final class PlayerStore: ObservableObject {
         for mediaURL in mediaURLs {
             let mediaKey = Self.mediaIdentityKey(for: mediaURL)
 
-            if let existingTrack = tracks.first(where: { Self.mediaIdentityKey(for: $0.url) == mediaKey }) {
+            if let existingTrack = tracks.first(where: {
+                Self.mediaIdentityKey(for: $0.url) == mediaKey
+            }) {
                 if firstTargetID == nil {
                     firstTargetID = existingTrack.id
                 }
@@ -154,7 +157,8 @@ final class PlayerStore: ObservableObject {
 
         tracks.append(contentsOf: addedTracks)
         tracks.sort {
-            $0.url.lastPathComponent.localizedStandardCompare($1.url.lastPathComponent) == .orderedAscending
+            $0.url.lastPathComponent.localizedStandardCompare($1.url.lastPathComponent)
+                == .orderedAscending
         }
         refreshDurations(for: addedTracks)
 
@@ -353,23 +357,21 @@ final class PlayerStore: ObservableObject {
             }
         }
 
-        NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)
-            .sink { [weak self] notification in
-                Task { @MainActor in
-                    self?.handlePlaybackFinished(notification)
-                }
+        Task {
+            for await notification in NotificationCenter.default.notifications(
+                named: .AVPlayerItemDidPlayToEndTime)
+            {
+                handlePlaybackFinished(notification)
             }
-            .store(in: &cancellables)
+        }
     }
 
     private func showLibraryNotice(_ message: String) {
         libraryNotice = message
         Task {
             try? await Task.sleep(for: .seconds(2.2))
-            await MainActor.run {
-                if self.libraryNotice == message {
-                    self.libraryNotice = nil
-                }
+            if self.libraryNotice == message {
+                self.libraryNotice = nil
             }
         }
     }
@@ -413,7 +415,9 @@ final class PlayerStore: ObservableObject {
     private func handlePlaybackTick(_ seconds: TimeInterval) {
         guard seconds.isFinite else { return }
 
-        if let itemDuration = player.currentItem?.duration.seconds, itemDuration.isFinite, itemDuration > 0 {
+        if let itemDuration = player.currentItem?.duration.seconds, itemDuration.isFinite,
+            itemDuration > 0
+        {
             duration = itemDuration
         }
 
@@ -470,7 +474,9 @@ final class PlayerStore: ObservableObject {
         var knownMediaKeys = Set<String>()
         tracks = storedTracks.compactMap { storedTrack in
             let url = URL(fileURLWithPath: storedTrack.path)
-            guard FileManager.default.fileExists(atPath: url.path), Self.isPlayableMediaURL(url) else {
+            guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)),
+                Self.isPlayableMediaURL(url)
+            else {
                 return nil
             }
             let mediaKey = Self.mediaIdentityKey(for: url)
@@ -478,8 +484,7 @@ final class PlayerStore: ObservableObject {
             return ListeningTrack(url: url, id: storedTrack.id)
         }
 
-        if
-            let selectedIDString = UserDefaults.standard.string(forKey: Keys.selectedTrackID),
+        if let selectedIDString = UserDefaults.standard.string(forKey: Keys.selectedTrackID),
             let selectedID = UUID(uuidString: selectedIDString),
             tracks.contains(where: { $0.id == selectedID })
         {
@@ -496,7 +501,9 @@ final class PlayerStore: ObservableObject {
     }
 
     private func persistLibrary() {
-        let storedTracks = tracks.map { StoredTrack(id: $0.id, path: $0.url.path) }
+        let storedTracks = tracks.map {
+            StoredTrack(id: $0.id, path: $0.url.path(percentEncoded: false))
+        }
         if let data = try? JSONEncoder().encode(storedTracks) {
             UserDefaults.standard.set(data, forKey: Keys.storedTracks)
         }
@@ -509,10 +516,15 @@ final class PlayerStore: ObservableObject {
     }
 
     private func addDefaultAudioIfAvailable() {
-        guard let defaultAudioDirectory = Self.defaultAudioDirectories().first(where: { directoryURL in
-            var isDirectory: ObjCBool = false
-            return FileManager.default.fileExists(atPath: directoryURL.path, isDirectory: &isDirectory) && isDirectory.boolValue
-        }) else {
+        guard
+            let defaultAudioDirectory = Self.defaultAudioDirectories().first(where: {
+                directoryURL in
+                var isDirectory: ObjCBool = false
+                return FileManager.default.fileExists(
+                    atPath: directoryURL.path(percentEncoded: false), isDirectory: &isDirectory)
+                    && isDirectory.boolValue
+            })
+        else {
             return
         }
 
@@ -523,15 +535,15 @@ final class PlayerStore: ObservableObject {
         for track in tracks {
             Task {
                 let loadedDuration = await Self.loadDuration(for: track.url)
-                await MainActor.run {
-                    self.applyDuration(loadedDuration, to: track.id)
-                }
+                self.applyDuration(loadedDuration, to: track.id)
             }
         }
     }
 
     private func applyDuration(_ loadedDuration: TimeInterval?, to id: ListeningTrack.ID) {
-        guard let loadedDuration, let index = tracks.firstIndex(where: { $0.id == id }) else { return }
+        guard let loadedDuration, let index = tracks.firstIndex(where: { $0.id == id }) else {
+            return
+        }
 
         tracks[index].duration = loadedDuration
         if selectedTrackID == id {
@@ -550,11 +562,13 @@ final class PlayerStore: ObservableObject {
 
             if resourceValues.isDirectory == true {
                 let keys: [URLResourceKey] = [.isRegularFileKey, .isHiddenKey]
-                guard let enumerator = fileManager.enumerator(
-                    at: url,
-                    includingPropertiesForKeys: keys,
-                    options: [.skipsHiddenFiles, .skipsPackageDescendants]
-                ) else {
+                guard
+                    let enumerator = fileManager.enumerator(
+                        at: url,
+                        includingPropertiesForKeys: keys,
+                        options: [.skipsHiddenFiles, .skipsPackageDescendants]
+                    )
+                else {
                     continue
                 }
 
@@ -591,9 +605,11 @@ final class PlayerStore: ObservableObject {
             candidates.append(resourceURL.appendingPathComponent("DefaultAudio", isDirectory: true))
         }
 
-        var directoryURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+        var directoryURL = URL(
+            fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
         for _ in 0..<8 {
-            candidates.append(directoryURL.appendingPathComponent("备考资料/官方材料/音频", isDirectory: true))
+            candidates.append(
+                directoryURL.appendingPathComponent("备考资料/官方材料/音频", isDirectory: true))
             let parentURL = directoryURL.deletingLastPathComponent()
             if parentURL == directoryURL {
                 break
@@ -610,7 +626,8 @@ final class PlayerStore: ObservableObject {
     }
 
     private static func defaultPlaybackMode() -> PlaybackMode {
-        PlaybackMode(rawValue: UserDefaults.standard.string(forKey: Keys.playbackMode) ?? "") ?? .sequence
+        PlaybackMode(rawValue: UserDefaults.standard.string(forKey: Keys.playbackMode) ?? "")
+            ?? .sequence
     }
 
     private static func defaultBool(_ key: String, fallback: Bool) -> Bool {

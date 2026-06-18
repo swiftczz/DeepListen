@@ -42,23 +42,23 @@ enum AppThemeColor: String, CaseIterable, Identifiable {
     var color: Color {
         switch self {
         case .system:
-            return Color(nsColor: .controlAccentColor)
+            return .accentColor
         case .blue:
-            return Color(nsColor: .systemBlue)
+            return .blue
         case .purple:
-            return Color(nsColor: .systemPurple)
+            return .purple
         case .pink:
-            return Color(nsColor: .systemPink)
+            return .pink
         case .red:
-            return Color(nsColor: .systemRed)
+            return .red
         case .orange:
-            return Color(nsColor: .systemOrange)
+            return .orange
         case .yellow:
-            return Color(nsColor: .systemYellow)
+            return .yellow
         case .green:
-            return Color(nsColor: .systemGreen)
+            return .green
         case .graphite:
-            return Color(nsColor: .systemGray)
+            return .gray
         }
     }
 

@@ -42,7 +42,7 @@ struct ListeningTrack: Identifiable, Codable, Hashable {
 
         for subtitleExtension in ["srt", "SRT", "vtt", "VTT"] {
             let candidate = baseURL.appendingPathExtension(subtitleExtension)
-            if fileManager.fileExists(atPath: candidate.path) {
+            if fileManager.fileExists(atPath: candidate.path(percentEncoded: false)) {
                 return candidate
             }
         }

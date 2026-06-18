@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PlayerDetailView: View {
-    @EnvironmentObject private var player: PlayerStore
+    @Environment(PlayerStore.self) private var player
     var theme: AppThemeColor
 
     var body: some View {
@@ -63,7 +63,7 @@ private struct HeaderView: View {
 }
 
 private struct TransportBarView: View {
-    @EnvironmentObject private var player: PlayerStore
+    @Environment(PlayerStore.self) private var player
     @State private var showsSpeedPopover = false
 
     var theme: AppThemeColor
@@ -258,7 +258,7 @@ private struct IconButton: View {
 }
 
 private struct ABLoopView: View {
-    @EnvironmentObject private var player: PlayerStore
+    @Environment(PlayerStore.self) private var player
     var theme: AppThemeColor
 
     var body: some View {
@@ -337,11 +337,12 @@ private struct ABLoopView: View {
 }
 
 private struct SubtitleView: View {
-    @EnvironmentObject private var player: PlayerStore
+    @Environment(PlayerStore.self) private var player
     @State private var displayMode: SubtitleDisplayMode = .current
     var theme: AppThemeColor
 
     var body: some View {
+        @Bindable var player = player
         VStack(alignment: .leading, spacing: 22) {
             HStack(spacing: 12) {
                 Label("字幕", systemImage: "captions.bubble")
