@@ -4,6 +4,7 @@ struct ContentView: View {
     @EnvironmentObject private var player: PlayerStore
     @AppStorage("themeColor") private var themeRawValue = ThemeColor.lime.rawValue
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    var showSettings: @MainActor () -> Void = {}
 
     private var theme: ThemeColor {
         ThemeColor.color(for: themeRawValue)
@@ -29,9 +30,7 @@ struct ContentView: View {
                 .buttonStyle(TitleBarActionButtonStyle())
                 .help("添加文件或目录")
 
-                Button {
-                    NotificationCenter.default.post(name: .didRequestSettingsWindow, object: nil)
-                } label: {
+                Button(action: showSettings) {
                     TitleBarIcon(systemImage: "gearshape")
                 }
                 .buttonStyle(TitleBarActionButtonStyle())

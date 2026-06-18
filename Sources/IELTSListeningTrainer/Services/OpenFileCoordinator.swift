@@ -2,7 +2,6 @@ import Foundation
 
 extension Notification.Name {
     static let didReceiveMediaURLs = Notification.Name("IELTSListeningTrainer.didReceiveMediaURLs")
-    static let didRequestSettingsWindow = Notification.Name("IELTSListeningTrainer.didRequestSettingsWindow")
 }
 
 @MainActor

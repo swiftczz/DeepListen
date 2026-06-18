@@ -23,13 +23,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         configureKeyboardShortcuts()
         showMainWindow()
         NSApp.activate(ignoringOtherApps: true)
-
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(showSettingsWindow),
-            name: .didRequestSettingsWindow,
-            object: nil
-        )
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -88,7 +81,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.minSize = NSSize(width: 960, height: 640)
         window.delegate = self
         let hostingController = NSHostingController(
-            rootView: ContentView()
+            rootView: ContentView(showSettings: { [weak self] in
+                self?.showSettingsWindow()
+            })
                 .environmentObject(playerStore)
         )
         hostingController.sizingOptions = []
