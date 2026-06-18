@@ -22,21 +22,6 @@ struct SidebarView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
-                    Section {
-                        HStack(spacing: 8) {
-                            Image(systemName: "magnifyingglass")
-                                .foregroundStyle(.secondary)
-                            TextField("搜索音频", text: $searchText)
-                                .textFieldStyle(.plain)
-                        }
-                        .font(.callout)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    }
-                    .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 10))
-                    .listRowBackground(Color.clear)
-
                     Section("听力音频") {
                         if visibleTracks.isEmpty {
                             Text("没有匹配的音频")
@@ -92,6 +77,7 @@ struct SidebarView: View {
                     }
                 }
                 .listStyle(.sidebar)
+                .searchable(text: $searchText, placement: .sidebar, prompt: "搜索音频")
             }
         }
     }
