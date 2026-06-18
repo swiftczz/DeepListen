@@ -2,12 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var player: PlayerStore
-    @AppStorage("themeColor") private var themeRawValue = ThemeColor.lime.rawValue
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
-
-    private var theme: ThemeColor {
-        ThemeColor.color(for: themeRawValue)
-    }
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -18,7 +13,7 @@ struct ContentView: View {
         }
         .navigationTitle("IELTS Listening Trainer")
         .frame(minWidth: 960, minHeight: 640)
-        .tint(theme.color)
+        .tint(.accentColor)
         .overlay(alignment: .top) {
             if let libraryNotice = player.libraryNotice {
                 Label(libraryNotice, systemImage: "checkmark.circle.fill")

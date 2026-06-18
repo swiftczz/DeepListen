@@ -6,7 +6,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let playerStore = PlayerStore()
 
     private var mainWindow: NSWindow?
-    private var settingsWindow: NSWindow?
     private var keyEventMonitor: Any?
     private var didStart = false
 
@@ -56,8 +55,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         if closingWindow == mainWindow {
             mainWindow = nil
-        } else if closingWindow == settingsWindow {
-            settingsWindow = nil
         }
     }
 
@@ -86,7 +83,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         )
         hostingController.sizingOptions = []
         window.contentViewController = hostingController
-        attachTitleBarActions(to: window)
         if let visibleFrame = NSScreen.main?.visibleFrame {
             window.setFrame(
                 NSRect(
@@ -106,83 +102,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         mainWindow = window
         NSApp.activate(ignoringOtherApps: true)
-    }
-
-    private func attachTitleBarActions(to window: NSWindow) {
-        guard let frameView = window.contentView?.superview else { return }
-
-        let addButton = TitleBarIconButton(
-            systemSymbolName: "plus",
-            accessibilityLabel: "添加文件或目录",
-            target: self,
-            action: #selector(importMedia)
-        )
-        addButton.toolTip = "添加文件或目录"
-
-        let settingsButton = TitleBarIconButton(
-            systemSymbolName: "gearshape",
-            accessibilityLabel: "设置",
-            target: self,
-            action: #selector(showSettingsWindow)
-        )
-        settingsButton.toolTip = "设置"
-
-        let stackView = NSStackView(views: [addButton, settingsButton])
-        stackView.orientation = .horizontal
-        stackView.spacing = 10
-        stackView.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
-        stackView.translatesAutoresizingMaskIntoConstraints = false
-
-        frameView.addSubview(stackView, positioned: .above, relativeTo: nil)
-        NSLayoutConstraint.activate([
-            stackView.topAnchor.constraint(equalTo: frameView.topAnchor, constant: 12),
-            stackView.trailingAnchor.constraint(equalTo: frameView.trailingAnchor, constant: -36)
-        ])
-    }
-
-    @objc func showSettingsWindow() {
-        if let settingsWindow {
-            settingsWindow.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 430, height: 300),
-            styleMask: [.titled, .closable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "设置"
-        window.isReleasedWhenClosed = false
-        window.delegate = self
-        let hostingController = NSHostingController(
-            rootView: SettingsView()
-                .environmentObject(playerStore)
-        )
-        hostingController.sizingOptions = []
-        window.contentViewController = hostingController
-        window.center()
-        window.makeKeyAndOrderFront(nil)
-
-        settingsWindow = window
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
-    @objc private func importFiles() {
-        playerStore.showImportFilesPanel()
-    }
-
-    @objc private func importMedia() {
-        playerStore.showImportMediaPanel()
-    }
-
-    @objc private func importFolder() {
-        playerStore.showImportFolderPanel()
-    }
-
-    @objc private func clearLibrary() {
-        playerStore.clearLibrary()
     }
 
     @objc private func togglePlayPause() {
@@ -286,37 +205,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             action: #selector(NSApplication.orderFrontStandardAboutPanel(_:))
         ))
         appMenu.addItem(.separator())
-        appMenu.addItem(menuItem(title: "设置...", action: #selector(showSettingsWindow), keyEquivalent: ","))
-        appMenu.addItem(.separator())
         appMenu.addItem(menuItem(
             title: "退出 IELTSListeningTrainer",
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q",
             target: NSApp
         ))
-
-        let fileMenuItem = NSMenuItem()
-        mainMenu.addItem(fileMenuItem)
-
-        let fileMenu = NSMenu(title: "文件")
-        fileMenuItem.submenu = fileMenu
-        fileMenu.addItem(menuItem(title: "显示主窗口", action: #selector(showMainWindow), keyEquivalent: "n"))
-        fileMenu.addItem(.separator())
-        fileMenu.addItem(menuItem(title: "导入文件...", action: #selector(importFiles), keyEquivalent: "o"))
-        fileMenu.addItem(menuItem(
-            title: "添加文件或目录...",
-            action: #selector(importMedia),
-            keyEquivalent: "o",
-            modifiers: [.command, .option]
-        ))
-        fileMenu.addItem(menuItem(
-            title: "导入目录...",
-            action: #selector(importFolder),
-            keyEquivalent: "o",
-            modifiers: [.command, .shift]
-        ))
-        fileMenu.addItem(.separator())
-        fileMenu.addItem(menuItem(title: "清空列表", action: #selector(clearLibrary)))
 
         let playbackMenuItem = NSMenuItem()
         mainMenu.addItem(playbackMenuItem)
@@ -351,53 +245,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         item.keyEquivalentModifierMask = modifiers
         item.target = target ?? self
         return item
-    }
-}
-
-private final class TitleBarIconButton: NSButton {
-    override var isHighlighted: Bool {
-        didSet {
-            updateAppearance()
-        }
-    }
-
-    init(systemSymbolName: String, accessibilityLabel: String, target: AnyObject?, action: Selector) {
-        super.init(frame: NSRect(x: 0, y: 0, width: 34, height: 34))
-
-        self.target = target
-        self.action = action
-        self.image = NSImage(systemSymbolName: systemSymbolName, accessibilityDescription: accessibilityLabel)
-        self.imagePosition = .imageOnly
-        self.imageScaling = .scaleProportionallyDown
-        self.contentTintColor = .secondaryLabelColor
-        self.isBordered = false
-        self.focusRingType = .none
-        self.translatesAutoresizingMaskIntoConstraints = false
-        self.wantsLayer = true
-
-        NSLayoutConstraint.activate([
-            widthAnchor.constraint(equalToConstant: 34),
-            heightAnchor.constraint(equalToConstant: 34)
-        ])
-        updateAppearance()
-    }
-
-    required init?(coder: NSCoder) {
-        nil
-    }
-
-    private func updateAppearance() {
-        guard let layer else { return }
-
-        layer.cornerRadius = 9
-        layer.backgroundColor = (
-            isHighlighted
-                ? NSColor.secondaryLabelColor.withAlphaComponent(0.18)
-                : NSColor.white.withAlphaComponent(0.96)
-        ).cgColor
-        layer.shadowColor = NSColor.black.cgColor
-        layer.shadowOpacity = isHighlighted ? 0 : 0.10
-        layer.shadowRadius = isHighlighted ? 0 : 10
-        layer.shadowOffset = NSSize(width: 0, height: -5)
     }
 }

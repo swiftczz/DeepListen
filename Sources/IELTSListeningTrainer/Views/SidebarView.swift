@@ -2,11 +2,10 @@ import SwiftUI
 
 struct SidebarView: View {
     @EnvironmentObject private var player: PlayerStore
-    @AppStorage("themeColor") private var themeRawValue = ThemeColor.lime.rawValue
     @State private var searchText = ""
 
-    private var theme: ThemeColor {
-        ThemeColor.color(for: themeRawValue)
+    private var theme: Color {
+        .accentColor
     }
 
     private var visibleTracks: [(index: Int, track: ListeningTrack)] {
@@ -87,7 +86,7 @@ struct SidebarView: View {
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                                     .fill(
                                         player.selectedTrackID == track.id
-                                            ? theme.color : Color.clear
+                                            ? theme : Color.clear
                                     )
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
@@ -105,7 +104,7 @@ private struct TrackRow: View {
     var track: ListeningTrack
     var index: Int
     var isSelected: Bool
-    var theme: ThemeColor
+    var theme: Color
 
     var body: some View {
         HStack(spacing: 12) {

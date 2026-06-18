@@ -2,7 +2,6 @@ import AppKit
 import AVFoundation
 import Combine
 import Foundation
-import UniformTypeIdentifiers
 
 @MainActor
 final class PlayerStore: NSObject, ObservableObject {
@@ -111,47 +110,6 @@ final class PlayerStore: NSObject, ObservableObject {
             return "A \(start.formattedPlaybackTime) 已设置"
         default:
             return "片段未设置"
-        }
-    }
-
-    func showImportFilesPanel() {
-        let panel = NSOpenPanel()
-        panel.title = "导入听力文件"
-        panel.prompt = "导入"
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = true
-        panel.allowedContentTypes = [.audio, .movie]
-
-        if panel.runModal() == .OK {
-            addURLs(panel.urls, autoplayFirst: false)
-        }
-    }
-
-    func showImportMediaPanel() {
-        let panel = NSOpenPanel()
-        panel.title = "添加听力文件或目录"
-        panel.prompt = "添加"
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = true
-        panel.allowedContentTypes = [.audio, .movie]
-
-        if panel.runModal() == .OK {
-            addURLs(panel.urls, autoplayFirst: false)
-        }
-    }
-
-    func showImportFolderPanel() {
-        let panel = NSOpenPanel()
-        panel.title = "导入听力目录"
-        panel.prompt = "导入"
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-
-        if panel.runModal() == .OK {
-            addURLs(panel.urls, autoplayFirst: false)
         }
     }
 
