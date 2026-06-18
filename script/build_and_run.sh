@@ -5,7 +5,6 @@ MODE="${1:-run}"
 APP_NAME="DeepListen"
 BUNDLE_ID="com.chengzhong.DeepListen"
 MIN_SYSTEM_VERSION="26.0"
-APP_VERSION="${APP_VERSION:-0.1.0}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
@@ -16,6 +15,15 @@ APP_RESOURCES="$APP_CONTENTS/Resources"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 ICON_SOURCE="$ROOT_DIR/Resources/AppIcon.icns"
+
+# 版本号优先级：环境变量 APP_VERSION > 最近的 git tag（去掉 v 前缀）> 0.0.0-dev
+if [[ -z "${APP_VERSION:-}" ]]; then
+  if tag=$(git -C "$ROOT_DIR" describe --tags --abbrev=0 2>/dev/null); then
+    APP_VERSION="${tag#v}"
+  else
+    APP_VERSION="0.0.0-dev"
+  fi
+fi
 
 write_info_plist() {
   cat >"$INFO_PLIST" <<PLIST
