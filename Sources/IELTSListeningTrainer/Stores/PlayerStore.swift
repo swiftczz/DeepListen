@@ -138,6 +138,24 @@ import UniformTypeIdentifiers
         }
     }
 
+    var seekTime: TimeInterval {
+        get {
+            min(currentTime, max(duration, 1))
+        }
+        set {
+            seek(to: newValue)
+        }
+    }
+
+    var playbackRateSelection: Double {
+        get {
+            playbackRate
+        }
+        set {
+            setPlaybackRate(newValue)
+        }
+    }
+
     @discardableResult
     func addURLs(_ urls: [URL], autoplayFirst: Bool) -> [ListeningTrack] {
         let mediaURLs = Self.discoverPlayableMediaURLs(from: urls)
@@ -145,24 +163,24 @@ import UniformTypeIdentifiers
 
         var firstTargetID: UUID?
         var addedTracks: [ListeningTrack] = []
-        var knownMediaKeys = Set(tracks.map { Self.mediaIdentityKey(for: $0.url) })
+        var knownMediaIDsByKey: [String: ListeningTrack.ID] = [:]
+        for track in tracks {
+            knownMediaIDsByKey[Self.mediaIdentityKey(for: track.url)] = track.id
+        }
 
         for mediaURL in mediaURLs {
             let mediaKey = Self.mediaIdentityKey(for: mediaURL)
 
-            if let existingTrack = tracks.first(where: {
-                Self.mediaIdentityKey(for: $0.url) == mediaKey
-            }) {
+            if let existingTrackID = knownMediaIDsByKey[mediaKey] {
                 if firstTargetID == nil {
-                    firstTargetID = existingTrack.id
+                    firstTargetID = existingTrackID
                 }
                 continue
             }
 
-            guard knownMediaKeys.insert(mediaKey).inserted else { continue }
-
             let track = ListeningTrack(url: mediaURL)
             addedTracks.append(track)
+            knownMediaIDsByKey[mediaKey] = track.id
             if firstTargetID == nil {
                 firstTargetID = track.id
             }
@@ -266,7 +284,10 @@ import UniformTypeIdentifiers
     }
 
     func seek(to seconds: TimeInterval) {
-        let clampedSeconds = max(0, min(seconds, max(duration, seconds)))
+        guard seconds.isFinite else { return }
+        let clampedSeconds = duration > 0
+            ? min(max(seconds, 0), duration)
+            : max(seconds, 0)
         currentTime = clampedSeconds
         updateSubtitleIndex(at: clampedSeconds)
         player.seek(

@@ -68,30 +68,16 @@ private struct TransportBarView: View {
 
     var theme: AppThemeColor
 
-    private var seekBinding: Binding<Double> {
-        Binding {
-            min(player.currentTime, max(player.duration, 1))
-        } set: { newValue in
-            player.seek(to: newValue)
-        }
-    }
-
-    private var rateBinding: Binding<Double> {
-        Binding {
-            player.playbackRate
-        } set: { newValue in
-            player.setPlaybackRate(newValue)
-        }
-    }
-
     private var remainingTime: TimeInterval {
         max(player.duration - player.currentTime, 0)
     }
 
     var body: some View {
+        @Bindable var player = player
+
         HStack(spacing: 14) {
             ABTimelineSlider(
-                value: seekBinding,
+                value: $player.seekTime,
                 duration: max(player.duration, 1),
                 loopStart: player.loopStart,
                 loopEnd: player.loopEnd,
@@ -118,7 +104,7 @@ private struct TransportBarView: View {
             }
             .help(String(format: "倍速 %.2fx", player.playbackRate))
             .popover(isPresented: $showsSpeedPopover, arrowEdge: .bottom) {
-                SpeedPopover(rateBinding: rateBinding, rate: player.playbackRate, theme: theme)
+                SpeedPopover(rateBinding: $player.playbackRateSelection, rate: player.playbackRate, theme: theme)
             }
 
             HStack(spacing: 10) {
