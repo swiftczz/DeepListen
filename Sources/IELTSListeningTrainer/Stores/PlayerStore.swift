@@ -38,6 +38,7 @@ import UniformTypeIdentifiers
     @ObservationIgnored private let player = AVPlayer()
 
     @ObservationIgnored private var timeObserver: Any?
+    @ObservationIgnored private var playbackFinishedTask: Task<Void, Never>?
 
     private static let playableMediaExtensions = [
         "mp3", "m4a", "aac", "wav", "aiff", "aif", "caf", "flac",
@@ -78,6 +79,10 @@ import UniformTypeIdentifiers
         if selectedTrackID != nil {
             loadCurrentTrack(autoplay: false)
         }
+    }
+
+    deinit {
+        playbackFinishedTask?.cancel()
     }
 
     var selectedTrack: ListeningTrack? {
@@ -366,10 +371,11 @@ import UniformTypeIdentifiers
             }
         }
 
-        Task {
+        playbackFinishedTask = Task { [weak self] in
             for await notification in NotificationCenter.default.notifications(
                 named: .AVPlayerItemDidPlayToEndTime)
             {
+                guard let self else { return }
                 handlePlaybackFinished(notification)
             }
         }
