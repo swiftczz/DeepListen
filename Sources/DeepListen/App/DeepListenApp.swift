@@ -33,12 +33,12 @@ private struct PlaybackCommands: Commands {
             Button("上一首") {
                 player.previousTrack()
             }
-            .keyboardShortcut("p")
+            .keyboardShortcut("p", modifiers: [])
 
             Button("下一首") {
                 player.nextTrack()
             }
-            .keyboardShortcut("n")
+            .keyboardShortcut("n", modifiers: [])
 
             Divider()
 
