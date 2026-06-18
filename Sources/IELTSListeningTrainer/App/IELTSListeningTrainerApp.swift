@@ -77,12 +77,7 @@ private struct PlaybackCommands: Commands {
             Divider()
 
             Button("切换播放模式") {
-                switch player.playbackMode {
-                case .sequence:
-                    player.playbackMode = .singleLoop
-                case .singleLoop:
-                    player.playbackMode = .sequence
-                }
+                player.togglePlaybackMode()
             }
         }
     }

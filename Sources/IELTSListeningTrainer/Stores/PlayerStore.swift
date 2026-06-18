@@ -35,7 +35,7 @@ import UniformTypeIdentifiers
     var loopStart: TimeInterval?
     var loopEnd: TimeInterval?
 
-    let player = AVPlayer()
+    @ObservationIgnored private let player = AVPlayer()
 
     @ObservationIgnored private var timeObserver: Any?
 
@@ -203,6 +203,15 @@ import UniformTypeIdentifiers
 
     func togglePlayPause() {
         isPlaying ? pause() : play()
+    }
+
+    func togglePlaybackMode() {
+        switch playbackMode {
+        case .sequence:
+            playbackMode = .singleLoop
+        case .singleLoop:
+            playbackMode = .sequence
+        }
     }
 
     func play() {
@@ -473,7 +482,7 @@ import UniformTypeIdentifiers
 
         var knownMediaKeys = Set<String>()
         tracks = storedTracks.compactMap { storedTrack in
-            let url = URL(fileURLWithPath: storedTrack.path)
+            let url = URL(filePath: storedTrack.path)
             guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)),
                 Self.isPlayableMediaURL(url)
             else {
@@ -602,14 +611,14 @@ import UniformTypeIdentifiers
         var candidates: [URL] = []
 
         if let resourceURL = Bundle.main.resourceURL {
-            candidates.append(resourceURL.appendingPathComponent("DefaultAudio", isDirectory: true))
+            candidates.append(resourceURL.appending(path: "DefaultAudio", directoryHint: .isDirectory))
         }
 
         var directoryURL = URL(
-            fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
         for _ in 0..<8 {
             candidates.append(
-                directoryURL.appendingPathComponent("备考资料/官方材料/音频", isDirectory: true))
+                directoryURL.appending(path: "备考资料/官方材料/音频", directoryHint: .isDirectory))
             let parentURL = directoryURL.deletingLastPathComponent()
             if parentURL == directoryURL {
                 break

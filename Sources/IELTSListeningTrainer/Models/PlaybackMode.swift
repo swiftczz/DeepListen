@@ -15,14 +15,6 @@ enum PlaybackMode: String, CaseIterable, Identifiable {
         }
     }
 
-    var compactTitle: String {
-        switch self {
-        case .sequence:
-            return "顺序"
-        case .singleLoop:
-            return "单曲"
-        }
-    }
 
     var systemImage: String {
         switch self {

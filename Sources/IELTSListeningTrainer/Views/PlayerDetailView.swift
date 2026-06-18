@@ -109,7 +109,7 @@ private struct TransportBarView: View {
                 .help("剩余时间")
 
             IconButton(systemImage: player.playbackMode.systemImage, theme: theme, isProminent: false) {
-                togglePlaybackMode()
+                player.togglePlaybackMode()
             }
             .help("播放模式：\(player.playbackMode.title)")
 
@@ -141,14 +141,6 @@ private struct TransportBarView: View {
         }
     }
 
-    private func togglePlaybackMode() {
-        switch player.playbackMode {
-        case .sequence:
-            player.playbackMode = .singleLoop
-        case .singleLoop:
-            player.playbackMode = .sequence
-        }
-    }
 }
 
 private struct ABTimelineSlider: View {

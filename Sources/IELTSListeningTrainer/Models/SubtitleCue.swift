@@ -1,10 +1,10 @@
 import Foundation
 
 struct SubtitleCue: Identifiable, Hashable {
-    var index: Int
-    var start: TimeInterval
-    var end: TimeInterval
-    var text: String
+    let index: Int
+    let start: TimeInterval
+    let end: TimeInterval
+    let text: String
 
     var id: Int { index }
 }
