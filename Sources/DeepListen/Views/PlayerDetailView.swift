@@ -412,8 +412,20 @@ private struct SubtitleView: View {
     }
 
     private var subtitleTitle: some View {
-        Label("字幕", systemImage: "captions.bubble")
-            .font(.headline)
+        Button {
+            player.showSubtitles.toggle()
+        } label: {
+            Image(systemName: "captions.bubble")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(player.showSubtitles ? theme.selectionForegroundColor : Color.secondary)
+                .frame(width: 36, height: 36)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(player.showSubtitles ? theme.color : Color.secondary.opacity(0.10))
+                )
+        }
+        .buttonStyle(.plain)
+        .help("字幕")
     }
 
     private var subtitleControlsGroup: some View {
@@ -429,14 +441,11 @@ private struct SubtitleView: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .frame(width: 150)
+
+                Toggle("上下文", isOn: $player.showSubtitleContext)
+                    .toggleStyle(.switch)
+                    .disabled(displayMode == .transcript)
             }
-
-            Toggle("显示", isOn: $player.showSubtitles)
-                .toggleStyle(.switch)
-
-            Toggle("上下文", isOn: $player.showSubtitleContext)
-                .toggleStyle(.switch)
-                .disabled(!player.showSubtitles || displayMode == .transcript)
         }
         .fixedSize()
     }
