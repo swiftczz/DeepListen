@@ -12,7 +12,7 @@ struct PlayerDetailView: View {
 
                     ScrollView {
                         VStack(alignment: .leading, spacing: 32) {
-                            HeaderView(track: track, index: (player.selectedIndex ?? 0) + 1, theme: theme)
+                            HeaderView(track: track, theme: theme)
                             TransportBarView(theme: theme)
                             ABLoopView(theme: theme)
                             SubtitleView(theme: theme)
@@ -37,32 +37,24 @@ struct PlayerDetailView: View {
 
 private struct HeaderView: View {
     var track: ListeningTrack
-    var index: Int
     var theme: AppThemeColor
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 22) {
-            Text(String(format: "%02d", index))
-                .font(.system(size: 34, weight: .bold, design: .rounded))
-                .foregroundStyle(theme.color)
-                .frame(width: 78, alignment: .leading)
+        VStack(alignment: .leading, spacing: 12) {
+            Text(track.title)
+                .font(.system(size: 40, weight: .semibold, design: .rounded))
+                .lineLimit(2)
+                .minimumScaleFactor(0.75)
 
-            VStack(alignment: .leading, spacing: 12) {
-                Text(track.title)
-                    .font(.system(size: 40, weight: .semibold, design: .rounded))
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.75)
-
-                HStack(spacing: 18) {
-                    Label((track.duration ?? 0).formattedPlaybackTime, systemImage: "clock")
-                    Label("\(track.fileExtension) · \(track.mediaKind.label)", systemImage: "music.note")
-                    if track.subtitleURL != nil {
-                        Label("SRT", systemImage: "captions.bubble")
-                    }
+            HStack(spacing: 18) {
+                Label((track.duration ?? 0).formattedPlaybackTime, systemImage: "clock")
+                Label("\(track.fileExtension) · \(track.mediaKind.label)", systemImage: "music.note")
+                if track.subtitleURL != nil {
+                    Label("SRT", systemImage: "captions.bubble")
                 }
-                .font(.callout)
-                .foregroundStyle(.secondary)
             }
+            .font(.callout)
+            .foregroundStyle(.secondary)
         }
     }
 }
