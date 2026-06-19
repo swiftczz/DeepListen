@@ -4,6 +4,8 @@ struct ContentView: View {
     @Environment(PlayerStore.self) private var player
     @AppStorage(AppThemeColor.storageKey) private var storedTheme = AppThemeColor.defaultTheme.rawValue
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var userPrefersSidebarHidden = false
+    @State private var isApplyingAutomaticColumnVisibility = false
     @State private var showsMediaImporter = false
     @State private var showsThemePopover = false
 
@@ -35,6 +37,21 @@ struct ContentView: View {
             proxy.size.width
         } action: { _, width in
             updateColumnVisibility(for: width)
+        }
+        .onChange(of: columnVisibility) { _, newVisibility in
+            guard !isApplyingAutomaticColumnVisibility else {
+                isApplyingAutomaticColumnVisibility = false
+                return
+            }
+
+            switch newVisibility {
+            case .all:
+                userPrefersSidebarHidden = false
+            case .detailOnly:
+                userPrefersSidebarHidden = true
+            default:
+                break
+            }
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
@@ -82,9 +99,16 @@ struct ContentView: View {
     }
 
     private func updateColumnVisibility(for width: CGFloat) {
-        let targetVisibility: NavigationSplitViewVisibility =
-            width < sidebarAutoHideWidth ? .detailOnly : .all
-        guard columnVisibility != targetVisibility else { return }
-        columnVisibility = targetVisibility
+        if width < sidebarAutoHideWidth {
+            applyAutomaticColumnVisibility(.detailOnly)
+        } else if !userPrefersSidebarHidden {
+            applyAutomaticColumnVisibility(.all)
+        }
+    }
+
+    private func applyAutomaticColumnVisibility(_ visibility: NavigationSplitViewVisibility) {
+        guard columnVisibility != visibility else { return }
+        isApplyingAutomaticColumnVisibility = true
+        columnVisibility = visibility
     }
 }
