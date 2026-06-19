@@ -42,7 +42,7 @@ private struct HeaderView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(track.title)
-                .font(.system(size: 40, weight: .semibold, design: .rounded))
+                .font(.custom("Avenir", size: 40).weight(.semibold))
                 .lineLimit(2)
                 .minimumScaleFactor(0.75)
 
