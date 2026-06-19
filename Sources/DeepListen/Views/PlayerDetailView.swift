@@ -167,33 +167,38 @@ private struct ABTimelineSlider: View {
     var loopEnd: TimeInterval?
     var theme: AppThemeColor
 
+    @State private var width: CGFloat = 0
+
     var body: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .leading) {
-                Slider(value: $value, in: 0...duration)
-                    .tint(theme.color)
+        ZStack(alignment: .leading) {
+            Slider(value: $value, in: 0...duration)
+                .tint(theme.color)
 
-                if let loopStart {
-                    marker(label: "A", time: loopStart, width: proxy.size.width)
-                }
-
-                if let loopEnd {
-                    marker(label: "B", time: loopEnd, width: proxy.size.width)
-                }
-
-                if let loopStart, let loopEnd, loopEnd > loopStart {
-                    loopRange(start: loopStart, end: loopEnd, width: proxy.size.width)
-                }
+            if let loopStart {
+                marker(label: "A", time: loopStart)
             }
+
+            if let loopEnd {
+                marker(label: "B", time: loopEnd)
+            }
+
+            if let loopStart, let loopEnd, loopEnd > loopStart {
+                loopRange(start: loopStart, end: loopEnd)
+            }
+        }
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { _, newWidth in
+            width = newWidth
         }
     }
 
-    private func position(for time: TimeInterval, width: CGFloat) -> CGFloat {
+    private func position(for time: TimeInterval) -> CGFloat {
         guard duration > 0 else { return 0 }
         return min(max(CGFloat(time / duration) * width, 0), width)
     }
 
-    private func marker(label: String, time: TimeInterval, width: CGFloat) -> some View {
+    private func marker(label: String, time: TimeInterval) -> some View {
         VStack(spacing: 2) {
             Text(label)
                 .font(.caption2.weight(.bold))
@@ -202,13 +207,13 @@ private struct ABTimelineSlider: View {
                 .fill(theme.color)
                 .frame(width: 3, height: 14)
         }
-        .offset(x: min(max(position(for: time, width: width) - 7, 0), width - 14), y: -3)
+        .offset(x: min(max(position(for: time) - 7, 0), width - 14), y: -3)
         .allowsHitTesting(false)
     }
 
-    private func loopRange(start: TimeInterval, end: TimeInterval, width: CGFloat) -> some View {
-        let startX = position(for: start, width: width)
-        let endX = position(for: end, width: width)
+    private func loopRange(start: TimeInterval, end: TimeInterval) -> some View {
+        let startX = position(for: start)
+        let endX = position(for: end)
 
         return Capsule()
             .fill(theme.color.opacity(0.28))
