@@ -364,6 +364,24 @@ import UniformTypeIdentifiers
         persistLibrary()
     }
 
+    /// 批量移除多个音频。若当前播放曲目在被删集合中，暂停并切到剩余列表的首项
+    /// （批量删除后"相邻曲目"概念模糊，首项更稳健）；否则保持播放不变。
+    func removeTracks(_ ids: Set<ListeningTrack.ID>) {
+        guard !ids.isEmpty else { return }
+
+        let removedSelectedTrack = selectedTrackID.map { ids.contains($0) } ?? false
+        tracks.removeAll { ids.contains($0.id) }
+
+        if removedSelectedTrack {
+            pause()
+            player.replaceCurrentItem(with: nil)
+            selectedTrackID = tracks.first?.id
+            loadCurrentTrack(autoplay: false)
+        }
+
+        persistLibrary()
+    }
+
     func clearLibrary() {
         pause()
         player.replaceCurrentItem(with: nil)
