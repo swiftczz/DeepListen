@@ -8,6 +8,11 @@ struct SidebarView: View {
     @State private var anchorIndex: Int?
     var theme: AppThemeColor
 
+    private let rowHighlightCornerRadius: CGFloat = 12
+    private let rowHighlightHorizontalInset: CGFloat = 10
+    private let rowHighlightBackground = Color(nsColor: .unemphasizedSelectedContentBackgroundColor)
+    private let rowHighlightBackgroundOpacity = 0.62
+
     private var visibleTracks: [(index: Int, track: ListeningTrack)] {
         Array(player.tracks.enumerated()).compactMap { index, track in
             guard !searchText.isEmpty else { return (index, track) }
@@ -51,10 +56,13 @@ struct SidebarView: View {
                             }
                             .listRowInsets(EdgeInsets(top: 2, leading: 12, bottom: 2, trailing: 10))
                             .listRowBackground(
-                                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                    .fill(isHighlighted ? theme.color : Color.clear)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
+                                RoundedRectangle(cornerRadius: rowHighlightCornerRadius, style: .continuous)
+                                    .fill(
+                                        isHighlighted
+                                            ? rowHighlightBackground.opacity(rowHighlightBackgroundOpacity)
+                                            : Color.clear
+                                    )
+                                    .padding(.horizontal, rowHighlightHorizontalInset)
                             )
                         }
                     }
@@ -146,17 +154,28 @@ private struct TrackRow: View {
     var isHighlighted: Bool
     var theme: AppThemeColor
 
+    private var primaryForeground: Color {
+        isHighlighted ? theme.color : Color.primary
+    }
+
+    private var secondaryForeground: Color {
+        isHighlighted ? theme.color.opacity(0.78) : Color.secondary
+    }
+
+    private var numberBackground: Color {
+        isHighlighted ? theme.color.opacity(0.12) : Color.secondary.opacity(0.10)
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             Text(String(format: "%02d", index))
                 .font(.callout)
                 .monospacedDigit()
-                .foregroundStyle(isHighlighted ? theme.selectionForegroundColor : Color.secondary)
+                .foregroundStyle(isHighlighted ? theme.color : Color.secondary)
                 .frame(width: 30, height: 30)
                 .background(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(
-                            isHighlighted ? Color.white.opacity(0.18) : Color.secondary.opacity(0.10))
+                        .fill(numberBackground)
                 )
 
             VStack(alignment: .leading, spacing: 1) {
@@ -164,14 +183,14 @@ private struct TrackRow: View {
                     .font(.body)
                     .fontWeight(.regular)
                     .lineLimit(1)
-                    .foregroundStyle(isHighlighted ? theme.selectionForegroundColor : Color.primary)
+                    .foregroundStyle(primaryForeground)
 
                 HStack(spacing: 6) {
                     Text((track.duration ?? 0).formattedPlaybackTime)
                     Text(track.mediaKind.label)
                 }
                 .font(.caption2)
-                .foregroundStyle(isHighlighted ? theme.selectionForegroundColor.opacity(0.78) : Color.secondary)
+                .foregroundStyle(secondaryForeground)
             }
 
             Spacer(minLength: 0)
