@@ -13,13 +13,11 @@ struct SidebarView: View {
     private let rowHighlightBackground = Color(nsColor: .unemphasizedSelectedContentBackgroundColor)
     private let rowHighlightBackgroundOpacity = 0.62
 
-    private var visibleTracks: [(index: Int, track: ListeningTrack)] {
-        Array(player.tracks.enumerated()).compactMap { index, track in
-            guard !searchText.isEmpty else { return (index, track) }
-            return track.title.localizedStandardContains(searchText)
-                || track.url.lastPathComponent.localizedStandardContains(searchText)
-                ? (index, track)
-                : nil
+    private var visibleTracks: [ListeningTrack] {
+        guard !searchText.isEmpty else { return player.tracks }
+        return player.tracks.filter {
+            $0.title.localizedStandardContains(searchText)
+                || $0.url.lastPathComponent.localizedStandardContains(searchText)
         }
     }
 
@@ -38,18 +36,20 @@ struct SidebarView: View {
                                 .padding(.vertical, 10)
                         }
 
-                        ForEach(visibleTracks, id: \.track.id) { index, track in
+                        ForEach(visibleTracks) { track in
                             let isHighlighted = player.selectedTrackID == track.id
                                 || selectedTrackIDs.contains(track.id)
                             TrackRow(
                                 track: track,
-                                index: index + 1,
                                 isHighlighted: isHighlighted,
                                 theme: theme
                             )
                             .contentShape(Rectangle())
+                            .accessibilityAddTraits(.isButton)
                             .onTapGesture {
-                                handleTap(at: index, track: track)
+                                if let visibleIndex = visibleTracks.firstIndex(where: { $0.id == track.id }) {
+                                    handleTap(at: visibleIndex, track: track)
+                                }
                             }
                             .contextMenu {
                                 contextualMenu(for: track)
@@ -86,7 +86,7 @@ struct SidebarView: View {
 
         if modifiers.contains(.shift), let anchor = anchorIndex {
             let range = min(anchor, index)...max(anchor, index)
-            let rangeIDs = visibleTracks[range].map(\.track.id)
+            let rangeIDs = visibleTracks[range].map(\.id)
             selectedTrackIDs.formUnion(rangeIDs)
         } else if modifiers.contains(.command) {
             if selectedTrackIDs.contains(trackID) {
@@ -149,10 +149,15 @@ struct SidebarView: View {
 }
 
 private struct TrackRow: View {
+    @Environment(PlayerStore.self) private var player
     var track: ListeningTrack
-    var index: Int
     var isHighlighted: Bool
     var theme: AppThemeColor
+
+    /// 显示序号：基于在完整曲目列表中的位置（而非过滤后列表），保持稳定编号。
+    private var displayNumber: Int {
+        ((player.tracks.firstIndex { $0.id == track.id }) ?? -1) + 1
+    }
 
     private var primaryForeground: Color {
         isHighlighted ? theme.color : Color.primary
@@ -168,7 +173,7 @@ private struct TrackRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Text(String(format: "%02d", index))
+            Text(String(format: "%02d", displayNumber))
                 .font(.callout)
                 .monospacedDigit()
                 .foregroundStyle(isHighlighted ? theme.color : Color.secondary)
