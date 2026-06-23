@@ -7,6 +7,7 @@ struct SidebarView: View {
     @State private var selectedTrackIDs: Set<ListeningTrack.ID> = []
     @State private var anchorIndex: Int?
     var theme: AppThemeColor
+    var searchFocus: FocusState<Bool>.Binding
 
     private let rowHighlightCornerRadius: CGFloat = 12
     private let rowHighlightHorizontalInset: CGFloat = 10
@@ -69,6 +70,7 @@ struct SidebarView: View {
                 }
                 .listStyle(.sidebar)
                 .searchable(text: $searchText, placement: .sidebar, prompt: "搜索音频")
+                .searchFocused(searchFocus)
                 .onDeleteCommand {
                     performBatchRemove()
                 }

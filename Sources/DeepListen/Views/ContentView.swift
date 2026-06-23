@@ -8,6 +8,8 @@ struct ContentView: View {
     @State private var isApplyingAutomaticColumnVisibility = false
     @State private var showsMediaImporter = false
     @State private var showsThemePopover = false
+    @FocusState private var isPlaybackKeyFocused: Bool
+    @FocusState private var isSidebarSearchFocused: Bool
 
     private let sidebarAutoHideWidth: CGFloat = 820
 
@@ -25,7 +27,7 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            SidebarView(theme: theme)
+            SidebarView(theme: theme, searchFocus: $isSidebarSearchFocused)
                 .navigationSplitViewColumnWidth(min: 270, ideal: 310, max: 360)
         } detail: {
             PlayerDetailView(theme: theme)
@@ -33,6 +35,19 @@ struct ContentView: View {
         .navigationTitle("DeepListen")
         .frame(minWidth: 800, minHeight: 640)
         .tint(theme.color)
+        .focusable()
+        .focused($isPlaybackKeyFocused)
+        .onAppear {
+            isPlaybackKeyFocused = true
+        }
+        .onChange(of: isSidebarSearchFocused) { _, isFocused in
+            if !isFocused {
+                isPlaybackKeyFocused = true
+            }
+        }
+        .onKeyPress(.space, phases: .down) { keyPress in
+            handlePlaybackKeyPress(keyPress)
+        }
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width
         } action: { _, width in
@@ -110,5 +125,14 @@ struct ContentView: View {
         guard columnVisibility != visibility else { return }
         isApplyingAutomaticColumnVisibility = true
         columnVisibility = visibility
+    }
+
+    private func handlePlaybackKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
+        guard keyPress.modifiers.isEmpty, !isSidebarSearchFocused else {
+            return .ignored
+        }
+
+        player.togglePlayPause()
+        return .handled
     }
 }
