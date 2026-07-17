@@ -2,7 +2,8 @@ import SwiftUI
 
 struct SubtitleView: View {
     @Environment(PlayerStore.self) private var player
-    @State private var displayMode: SubtitleDisplayMode = .current
+
+    @Binding var displayMode: SubtitleDisplayMode
 
     var theme: AppThemeColor
 
@@ -182,13 +183,14 @@ struct SubtitleView: View {
                 .accessibilityLabel("\(cue.start.formattedPlaybackTime)，\(cue.text)")
                 .accessibilityValue(isCurrent ? "当前字幕" : "")
                 .accessibilityHint("跳转到这一句")
+                .id(cue.id)
             }
         }
         .textSelection(.enabled)
     }
 }
 
-private enum SubtitleDisplayMode: String, CaseIterable, Identifiable {
+enum SubtitleDisplayMode: String, CaseIterable, Identifiable {
     case current
     case transcript
 

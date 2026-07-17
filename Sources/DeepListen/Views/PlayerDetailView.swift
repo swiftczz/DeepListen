@@ -3,6 +3,7 @@ import SwiftUI
 struct PlayerDetailView: View {
     @Environment(PlayerStore.self) private var player
     @State private var detailWidth: CGFloat = 0
+    @State private var subtitleDisplayMode: SubtitleDisplayMode = .current
 
     var theme: AppThemeColor
 
@@ -25,14 +26,26 @@ struct PlayerDetailView: View {
                     .padding(.top, 28)
                     .padding(.bottom, 24)
 
-                    ScrollView {
-                        SubtitleView(theme: theme)
+                    ScrollViewReader { scrollProxy in
+                        ScrollView {
+                            SubtitleView(
+                                displayMode: $subtitleDisplayMode,
+                                theme: theme
+                            )
                             .frame(maxWidth: 1120, alignment: .leading)
                             .frame(maxWidth: .infinity, alignment: .center)
                             .padding(.horizontal, horizontalPadding)
                             .padding(.vertical, 24)
+                        }
+                        .scrollEdgeEffectStyle(.soft, for: .top)
+                        .onChange(of: player.currentSubtitleIndex) {
+                            scrollToCurrentSubtitle(using: scrollProxy)
+                        }
+                        .onChange(of: subtitleDisplayMode) { _, newMode in
+                            guard newMode == .transcript else { return }
+                            scrollToCurrentSubtitle(using: scrollProxy)
+                        }
                     }
-                    .scrollEdgeEffectStyle(.soft, for: .top)
                 }
                 .onGeometryChange(for: CGFloat.self) { proxy in
                     proxy.size.width
@@ -46,6 +59,18 @@ struct PlayerDetailView: View {
                     description: Text("通过 Finder 打开音视频文件后开始练习")
                 )
             }
+        }
+    }
+
+    private func scrollToCurrentSubtitle(using proxy: ScrollViewProxy) {
+        guard subtitleDisplayMode == .transcript,
+            let currentSubtitleID = player.currentSubtitle?.id
+        else {
+            return
+        }
+
+        withAnimation(.easeInOut(duration: 0.22)) {
+            proxy.scrollTo(currentSubtitleID, anchor: .center)
         }
     }
 }
