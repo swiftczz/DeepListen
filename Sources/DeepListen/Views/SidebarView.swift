@@ -86,14 +86,16 @@ struct SidebarView: View {
         }
     }
 
-    /// Finder 式灰色选中高亮：用 listRowBackground 替换原生强调色 pill，
-    /// 主题色只保留给"正在播放"状态。
+    /// Finder 式灰色圆角选中胶囊。
+    /// 原生表格的选中高亮（聚焦时为蓝色）由 `SelectionHighlightSuppressor` 关闭，
+    /// 因此这里内缩成圆角也不会有蓝色描边从边缘漏出；主题色只保留给「正在播放」。
     @ViewBuilder
     private func rowBackground(isSelected: Bool) -> some View {
         if isSelected {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(Color(nsColor: .unemphasizedSelectedContentBackgroundColor))
-                .padding(.horizontal, 10)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 1)
         }
     }
 
@@ -206,8 +208,7 @@ private struct TrackRow: View {
     var body: some View {
         HStack(spacing: 10) {
             ZStack {
-                // 列表 tint 已被覆盖为灰色（选中 pill 用），
-                // "正在播放"指示必须用显式 theme.color，文字用不随选中翻转的固定标签色。
+                // 「正在播放」指示用显式 theme.color，文字用不随选中翻转的固定标签色。
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(isCurrentTrack ? theme.color.opacity(0.14) : Color.secondary.opacity(0.10))
 
@@ -244,11 +245,45 @@ private struct TrackRow: View {
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+        .background(SelectionHighlightSuppressor())
         .accessibilityElement(children: .combine)
         .accessibilityValue(
             isCurrentTrack
                 ? (isPlaying ? "正在播放" : "当前音频")
                 : ""
         )
+    }
+}
+
+/// 关闭 SwiftUI sidebar List 底层 NSTableView/NSOutlineView 的原生选中高亮
+/// （聚焦时的蓝色强调），让 `listRowBackground` 提供的灰色圆角胶囊成为唯一可见的选中样式。
+/// 找不到宿主表格时静默降级（回到原生高亮），不会崩溃。
+private struct SelectionHighlightSuppressor: NSViewRepresentable {
+    func makeNSView(context: Context) -> ProbeView {
+        ProbeView()
+    }
+
+    func updateNSView(_ nsView: ProbeView, context: Context) {
+        nsView.suppressEnclosingTableHighlight()
+    }
+
+    final class ProbeView: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            suppressEnclosingTableHighlight()
+        }
+
+        func suppressEnclosingTableHighlight() {
+            var ancestor = superview
+            while let current = ancestor {
+                if let tableView = current as? NSTableView {
+                    if tableView.selectionHighlightStyle != .none {
+                        tableView.selectionHighlightStyle = .none
+                    }
+                    return
+                }
+                ancestor = current.superview
+            }
+        }
     }
 }

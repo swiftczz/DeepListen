@@ -78,8 +78,8 @@ struct TransportBarView: View {
     private var playbackControls: some View {
         GlassEffectContainer(spacing: 10) {
             HStack(spacing: 14) {
-                playbackOptions
                 transportButtons
+                playbackOptions
             }
         }
         .fixedSize()
@@ -125,11 +125,6 @@ struct TransportBarView: View {
 
     private var transportButtons: some View {
         HStack(spacing: 10) {
-            IconButton(label: "后退 5 秒", systemImage: "gobackward.5", theme: theme, isProminent: false) {
-                player.skip(by: -5)
-            }
-            .help("后退 5 秒")
-
             IconButton(
                 label: player.isPlaying ? "暂停" : "播放",
                 systemImage: player.isPlaying ? "pause.fill" : "play.fill",
@@ -139,6 +134,11 @@ struct TransportBarView: View {
                 player.togglePlayPause()
             }
             .help(player.isPlaying ? "暂停" : "播放")
+
+            IconButton(label: "后退 5 秒", systemImage: "gobackward.5", theme: theme, isProminent: false) {
+                player.skip(by: -5)
+            }
+            .help("后退 5 秒")
 
             IconButton(label: "前进 5 秒", systemImage: "goforward.5", theme: theme, isProminent: false) {
                 player.skip(by: 5)

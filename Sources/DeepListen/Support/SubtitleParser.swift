@@ -1,22 +1,38 @@
 import Foundation
 
 enum SubtitleParser {
+    private static let gb18030 = String.Encoding(
+        rawValue: CFStringConvertEncodingToNSStringEncoding(
+            CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue)
+        )
+    )
+
     static func parse(url: URL) -> [SubtitleCue] {
-        guard let data = try? Data(contentsOf: url) else { return [] }
+        guard let text = decodeText(at: url) else { return [] }
+        return parse(text)
+    }
 
-        if let text = String(data: data, encoding: .utf8) {
-            return parse(text)
+    /// 按编码逐个尝试，并用"必须含有时间轴箭头"来校验结果。
+    /// 关键：UTF-16 / Latin-1 对几乎任意字节都能"解码成功"但产出乱码，
+    /// 只有加上这个校验才能把乱码候选排除掉，而不是把乱码当正文显示。
+    private static func decodeText(at url: URL) -> String? {
+        var candidates: [String] = []
+
+        // 系统嗅探优先：能正确处理带 BOM 的 UTF-8 / UTF-16。
+        var detectedEncoding = String.Encoding.utf8
+        if let text = try? String(contentsOf: url, usedEncoding: &detectedEncoding) {
+            candidates.append(text)
         }
 
-        if let text = String(data: data, encoding: .utf16) {
-            return parse(text)
+        if let data = try? Data(contentsOf: url) {
+            for encoding in [String.Encoding.utf8, gb18030, .utf16, .isoLatin1] {
+                if let text = String(data: data, encoding: encoding) {
+                    candidates.append(text)
+                }
+            }
         }
 
-        if let text = String(data: data, encoding: .isoLatin1) {
-            return parse(text)
-        }
-
-        return []
+        return candidates.first { $0.contains("-->") }
     }
 
     static func parse(_ text: String) -> [SubtitleCue] {
@@ -25,7 +41,7 @@ enum SubtitleParser {
             .replacingOccurrences(of: "\r", with: "\n")
 
         let blocks = normalizedText.components(separatedBy: "\n\n")
-        var cues: [SubtitleCue] = []
+        var parsedCues: [(start: TimeInterval, end: TimeInterval, text: String)] = []
 
         for block in blocks {
             let lines = block
@@ -52,10 +68,17 @@ enum SubtitleParser {
 
             guard !cueText.isEmpty else { continue }
 
-            cues.append(SubtitleCue(index: cues.count + 1, start: start, end: end, text: cueText))
+            parsedCues.append((start: start, end: end, text: cueText))
         }
 
-        return cues
+        // 必须按时间排序：PlayerStore.subtitlePosition 用二分查找定位当前句，
+        // 前提是 cues 有序。乱序字幕文件会让二分查找漏掉当前句。
+        return parsedCues
+            .sorted { $0.start < $1.start }
+            .enumerated()
+            .map { offset, cue in
+                SubtitleCue(index: offset + 1, start: cue.start, end: cue.end, text: cue.text)
+            }
     }
 
     private static func parseTimestamp(_ rawTimestamp: String) -> TimeInterval? {

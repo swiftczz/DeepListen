@@ -69,6 +69,12 @@ struct SubtitleView: View {
             .padding(.vertical, 18)
     }
 
+    /// 句间空隙（无当前句）时主槽位预览下一句，待其开始播放再原地由灰转主题色。
+    /// 此时上下文区必须跳过下一句，否则同一句会渲染两遍。
+    private var isPreviewingNextSubtitle: Bool {
+        player.currentSubtitle == nil && player.nextSubtitle != nil
+    }
+
     private var currentSubtitleView: some View {
         VStack(alignment: .leading, spacing: 16) {
             if player.showSubtitleContext, let previousSubtitle = player.previousSubtitle {
@@ -84,7 +90,10 @@ struct SubtitleView: View {
                 .lineSpacing(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            if player.showSubtitleContext, let nextSubtitle = player.nextSubtitle {
+            if player.showSubtitleContext,
+                !isPreviewingNextSubtitle,
+                let nextSubtitle = player.nextSubtitle
+            {
                 Text(nextSubtitle.text)
                     .font(.title3)
                     .foregroundStyle(.secondary)

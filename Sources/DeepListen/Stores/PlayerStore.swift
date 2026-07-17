@@ -62,6 +62,9 @@ import Observation
     private struct StoredTrack: Codable {
         var id: UUID
         var path: String
+        /// 缓存时长，避免每次启动都重新解析整库媒体文件。
+        /// 可选类型 + decodeIfPresent，兼容没有该字段的旧数据。
+        var duration: TimeInterval?
     }
 
     init(fileRevealer: FileRevealing = MacFileRevealer()) {
@@ -90,6 +93,7 @@ import Observation
         subtitleLoadTask?.cancel()
         importTask?.cancel()
         durationLoadTasks.values.forEach { $0.cancel() }
+        nowPlayingController.teardown()
 
         if let timeObserver {
             player.removeTimeObserver(timeObserver)
@@ -265,7 +269,6 @@ import Observation
         }
 
         selectedTrackID = id
-        UserDefaults.standard.set(id.uuidString, forKey: Keys.selectedTrackID)
         loadCurrentTrack(autoplay: autoplay)
         persistLibrary()
     }
@@ -308,6 +311,9 @@ import Observation
         updateNowPlaying()
     }
 
+    /// 手动切换到下一首会在末尾回绕到第一首（显式操作，回绕是用户预期）。
+    /// 这与顺序播放放完最后一首后停止（见 handlePlaybackFinished）是有意区分的：
+    /// 自动连播不应无限循环整个列表。
     func nextTrack() {
         guard !tracks.isEmpty else { return }
         let nextIndex = ((selectedIndex ?? -1) + 1) % tracks.count
@@ -391,6 +397,7 @@ import Observation
     func removeTrack(_ id: ListeningTrack.ID) {
         guard let index = tracks.firstIndex(where: { $0.id == id }) else { return }
         let removedSelectedTrack = tracks[index].id == selectedTrackID
+        cancelDurationLoads(for: [id])
         tracks.remove(at: index)
 
         if removedSelectedTrack {
@@ -409,6 +416,7 @@ import Observation
         guard !ids.isEmpty else { return }
 
         let removedSelectedTrack = selectedTrackID.map { ids.contains($0) } ?? false
+        cancelDurationLoads(for: ids)
         tracks.removeAll { ids.contains($0.id) }
 
         if removedSelectedTrack {
@@ -425,6 +433,9 @@ import Observation
         importTask?.cancel()
         importTask = nil
         isImporting = false
+        subtitleLoadTask?.cancel()
+        subtitleLoadTask = nil
+        cancelDurationLoads(for: tracks.map(\.id))
         pause()
         player.replaceCurrentItem(with: nil)
         tracks.removeAll()
@@ -518,7 +529,7 @@ import Observation
     }
 
     private func loadCurrentTrack(autoplay: Bool) {
-        guard let selectedTrack else {
+        guard let index = selectedTrackIndex else {
             player.replaceCurrentItem(with: nil)
             subtitleCues.removeAll()
             resetSubtitlePosition()
@@ -528,6 +539,14 @@ import Observation
             nowPlayingController.clear()
             return
         }
+
+        // 每次载入都重新匹配同名字幕：曲目导入后才补上的 .srt/.vtt 也能被发现，
+        // 否则 subtitleURL 只在 init 时解析一次，必须重启才生效。
+        let resolvedSubtitleURL = ListeningTrack.matchingSubtitleURL(for: tracks[index].url)
+        if tracks[index].subtitleURL != resolvedSubtitleURL {
+            tracks[index].subtitleURL = resolvedSubtitleURL
+        }
+        let selectedTrack = tracks[index]
 
         player.replaceCurrentItem(with: AVPlayerItem(url: selectedTrack.url))
         isPlaying = false
@@ -578,8 +597,9 @@ import Observation
         guard seconds.isFinite else { return }
 
         if let itemDuration = player.currentItem?.duration.seconds, itemDuration.isFinite,
-            itemDuration > 0
+            itemDuration > 0, duration != itemDuration
         {
+            // @Observable 的写入不做相等性去重，不加判断会每 80ms 触发一次无谓的视图失效。
             duration = itemDuration
         }
 
@@ -692,7 +712,7 @@ import Observation
             else {
                 return nil
             }
-            return ListeningTrack(url: url, id: storedTrack.id)
+            return ListeningTrack(url: url, id: storedTrack.id, duration: storedTrack.duration)
         })
 
         if let selectedIDString = UserDefaults.standard.string(forKey: Keys.selectedTrackID),
@@ -708,12 +728,17 @@ import Observation
             persistLibrary()
         }
 
-        refreshDurations(for: tracks)
+        // 只解析没有缓存时长的曲目，避免每次启动为整库并发起解析任务。
+        refreshDurations(for: tracks.filter { $0.duration == nil })
     }
 
     private func persistLibrary() {
         let storedTracks = tracks.map {
-            StoredTrack(id: $0.id, path: $0.url.path(percentEncoded: false))
+            StoredTrack(
+                id: $0.id,
+                path: $0.url.path(percentEncoded: false),
+                duration: $0.duration
+            )
         }
         if let data = try? JSONEncoder().encode(storedTracks) {
             UserDefaults.standard.set(data, forKey: Keys.storedTracks)
@@ -755,8 +780,20 @@ import Observation
                     guard let self else { return }
                     applyDuration(loadedDuration, to: trackID)
                     durationLoadTasks[trackID] = nil
+                    // 整批加载完再落盘一次，避免每个曲目都重写一遍整个列表。
+                    if durationLoadTasks.isEmpty {
+                        persistLibrary()
+                    }
                 }
             }
+        }
+    }
+
+    /// 曲目被移除时取消其在途的时长解析任务，避免做无用功。
+    private func cancelDurationLoads(for ids: some Sequence<ListeningTrack.ID>) {
+        for id in ids {
+            durationLoadTasks[id]?.cancel()
+            durationLoadTasks[id] = nil
         }
     }
 

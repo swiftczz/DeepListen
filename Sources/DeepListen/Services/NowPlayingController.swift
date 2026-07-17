@@ -15,6 +15,12 @@ final class NowPlayingController {
     }
 
     private var didConfigure = false
+    /// MPRemoteCommandCenter 是全局单例，注册的 target 必须自己持有句柄才能摘除。
+    private var registeredTargets: [(command: MPRemoteCommand, target: Any)] = []
+
+    isolated deinit {
+        teardown()
+    }
 
     func configure(handlers: Handlers) {
         guard !didConfigure else { return }
@@ -22,39 +28,39 @@ final class NowPlayingController {
 
         let center = MPRemoteCommandCenter.shared()
 
-        center.playCommand.addTarget { _ in
+        register(center.playCommand) { _ in
             Task { @MainActor in handlers.play() }
             return .success
         }
-        center.pauseCommand.addTarget { _ in
+        register(center.pauseCommand) { _ in
             Task { @MainActor in handlers.pause() }
             return .success
         }
-        center.togglePlayPauseCommand.addTarget { _ in
+        register(center.togglePlayPauseCommand) { _ in
             Task { @MainActor in handlers.toggle() }
             return .success
         }
-        center.nextTrackCommand.addTarget { _ in
+        register(center.nextTrackCommand) { _ in
             Task { @MainActor in handlers.next() }
             return .success
         }
-        center.previousTrackCommand.addTarget { _ in
+        register(center.previousTrackCommand) { _ in
             Task { @MainActor in handlers.previous() }
             return .success
         }
 
         center.skipForwardCommand.preferredIntervals = [5]
-        center.skipForwardCommand.addTarget { _ in
+        register(center.skipForwardCommand) { _ in
             Task { @MainActor in handlers.skip(5) }
             return .success
         }
         center.skipBackwardCommand.preferredIntervals = [5]
-        center.skipBackwardCommand.addTarget { _ in
+        register(center.skipBackwardCommand) { _ in
             Task { @MainActor in handlers.skip(-5) }
             return .success
         }
 
-        center.changePlaybackPositionCommand.addTarget { event in
+        register(center.changePlaybackPositionCommand) { event in
             guard let event = event as? MPChangePlaybackPositionCommandEvent else {
                 return .commandFailed
             }
@@ -62,6 +68,27 @@ final class NowPlayingController {
             Task { @MainActor in handlers.seek(target) }
             return .success
         }
+    }
+
+    /// 摘除全部远程命令并清空"正在播放"信息，让出系统媒体键控制权。
+    func teardown() {
+        for entry in registeredTargets {
+            entry.command.removeTarget(entry.target)
+        }
+        registeredTargets.removeAll()
+        didConfigure = false
+
+        let infoCenter = MPNowPlayingInfoCenter.default()
+        infoCenter.nowPlayingInfo = nil
+        infoCenter.playbackState = .stopped
+    }
+
+    private func register(
+        _ command: MPRemoteCommand,
+        handler: @escaping @Sendable (MPRemoteCommandEvent) -> MPRemoteCommandHandlerStatus
+    ) {
+        let target = command.addTarget(handler: handler)
+        registeredTargets.append((command: command, target: target))
     }
 
     func update(

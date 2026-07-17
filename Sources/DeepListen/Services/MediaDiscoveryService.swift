@@ -58,9 +58,20 @@ enum MediaDiscoveryService {
         playableExtensionSet.contains(url.pathExtension.lowercased())
     }
 
+    /// 用文件系统的唯一标识做去重键：同一文件的不同路径（软链、别名）命中同一 key，
+    /// 而不同目录下的同名同大小文件（如各 Test 目录里的 "Section 1.mp3"）不会被误判成重复。
+    /// 旧实现用"文件名+大小"，会把这类文件静默跳过导入。
     static func mediaIdentityKey(for url: URL) -> String {
+        if let identifier = try? url.resourceValues(forKeys: [.fileResourceIdentifierKey])
+            .fileResourceIdentifier
+        {
+            return "id:\(identifier)"
+        }
+
+        // 回退：文件不可访问时按标准化全路径区分。
         let fileSize = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? -1
-        return "\(url.lastPathComponent.lowercased())#\(fileSize)"
+        let path = url.standardizedFileURL.path(percentEncoded: false).lowercased()
+        return "path:\(path)#\(fileSize)"
     }
 
     private static func discoverPlayableMediaURLs(from urls: [URL]) -> [URL] {
