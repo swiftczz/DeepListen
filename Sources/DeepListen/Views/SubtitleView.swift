@@ -152,41 +152,65 @@ struct SubtitleView: View {
 
         return LazyVStack(alignment: .leading, spacing: 8) {
             ForEach(player.subtitleCues) { cue in
-                let isCurrent = cue.id == currentSubtitleID
-
-                Button {
+                TranscriptRow(
+                    cue: cue,
+                    isCurrent: cue.id == currentSubtitleID,
+                    theme: theme
+                ) {
                     player.jumpToSubtitle(cue)
-                } label: {
-                    HStack(alignment: .top, spacing: 12) {
-                        Text(cue.start.formattedPlaybackTime)
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .frame(width: 44, alignment: .leading)
-
-                        Text(cue.text)
-                            .font(.body)
-                            .foregroundStyle(isCurrent ? theme.color : Color.primary)
-                            .lineLimit(nil)
-                            .multilineTextAlignment(.leading)
-
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 9)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(isCurrent ? theme.color.opacity(0.10) : Color.clear)
-                    )
                 }
-                .buttonStyle(.plain)
-                .help("跳转到 \(cue.start.formattedPlaybackTime)")
-                .accessibilityLabel("\(cue.start.formattedPlaybackTime)，\(cue.text)")
-                .accessibilityValue(isCurrent ? "当前字幕" : "")
-                .accessibilityHint("跳转到这一句")
                 .id(cue.id)
             }
         }
         .textSelection(.enabled)
+    }
+}
+
+private struct TranscriptRow: View {
+    var cue: SubtitleCue
+    var isCurrent: Bool
+    var theme: AppThemeColor
+    var onTap: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(alignment: .top, spacing: 12) {
+                Text(cue.start.formattedPlaybackTime)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 44, alignment: .leading)
+
+                Text(cue.text)
+                    .font(.body)
+                    .foregroundStyle(isCurrent ? theme.color : Color.primary)
+                    .lineLimit(nil)
+                    .multilineTextAlignment(.leading)
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(backgroundColor)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .help("跳转到 \(cue.start.formattedPlaybackTime)")
+        .accessibilityLabel("\(cue.start.formattedPlaybackTime)，\(cue.text)")
+        .accessibilityValue(isCurrent ? "当前字幕" : "")
+        .accessibilityHint("跳转到这一句")
+    }
+
+    private var backgroundColor: Color {
+        if isCurrent {
+            return theme.color.opacity(0.10)
+        }
+        return isHovering ? Color.secondary.opacity(0.10) : Color.clear
     }
 }
 

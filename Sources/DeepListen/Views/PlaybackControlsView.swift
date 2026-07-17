@@ -15,6 +15,20 @@ struct TransportBarView: View {
         return "-\(remainingTime.formattedPlaybackTime)"
     }
 
+    /// 倍速按钮面显示值：整数 "1×"、半档 "1.5×"、四分档 "1.25×"。
+    private var speedLabel: String {
+        let rate = player.playbackRate
+        let number: String
+        if rate == rate.rounded() {
+            number = String(format: "%.0f", rate)
+        } else if (rate * 10).rounded() == rate * 10 {
+            number = String(format: "%.1f", rate)
+        } else {
+            number = String(format: "%.2f", rate)
+        }
+        return number + "×"
+    }
+
     var body: some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 14) {
@@ -85,10 +99,20 @@ struct TransportBarView: View {
             }
             .help("播放模式：\(player.playbackMode.title)")
 
-            IconButton(label: "倍速", systemImage: "speedometer", theme: theme, isProminent: false) {
-                showsSpeedPopover.toggle()
+            GlassButton(
+                accessibilityLabel: "倍速",
+                theme: theme,
+                isProminent: false,
+                action: { showsSpeedPopover.toggle() }
+            ) {
+                Text(speedLabel)
+                    .font(.system(size: 14, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(player.playbackRate == 1 ? Color.primary : theme.color)
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
             }
             .help(String(format: "倍速 %.2fx", player.playbackRate))
+            .accessibilityValue(String(format: "%.2f 倍", player.playbackRate))
             .popover(isPresented: $showsSpeedPopover, arrowEdge: .bottom) {
                 SpeedPopover(
                     rateBinding: $player.playbackRateSelection,
@@ -265,17 +289,16 @@ private struct SpeedPopover: View {
     }
 }
 
-private struct IconButton: View {
-    var label: String
-    var systemImage: String
+private struct GlassButton<Content: View>: View {
+    var accessibilityLabel: String
     var theme: AppThemeColor
     var isProminent: Bool
     var action: () -> Void
+    @ViewBuilder var content: Content
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 18, weight: .semibold))
+            content
                 .foregroundStyle(isProminent ? theme.selectionForegroundColor : Color.primary)
                 .frame(width: 46, height: 46)
                 .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -287,6 +310,26 @@ private struct IconButton: View {
                 )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(label)
+        .accessibilityLabel(accessibilityLabel)
+    }
+}
+
+private struct IconButton: View {
+    var label: String
+    var systemImage: String
+    var theme: AppThemeColor
+    var isProminent: Bool
+    var action: () -> Void
+
+    var body: some View {
+        GlassButton(
+            accessibilityLabel: label,
+            theme: theme,
+            isProminent: isProminent,
+            action: action
+        ) {
+            Image(systemName: systemImage)
+                .font(.system(size: 18, weight: .semibold))
+        }
     }
 }

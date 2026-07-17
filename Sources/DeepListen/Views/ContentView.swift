@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var isApplyingAutomaticColumnVisibility = false
     @State private var showsMediaImporter = false
     @State private var showsThemePopover = false
+    @State private var isDropTargeted = false
     @FocusState private var isSidebarSearchFocused: Bool
 
     private let sidebarAutoHideWidth: CGFloat = 820
@@ -36,6 +37,24 @@ struct ContentView: View {
         .frame(minWidth: 800, minHeight: 640)
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .tint(theme.color)
+        .dropDestination(for: URL.self) { urls, _ in
+            guard !urls.isEmpty else { return false }
+            player.openExternalURLs(urls)
+            return true
+        } isTargeted: { targeted in
+            isDropTargeted = targeted
+        }
+        .overlay {
+            if isDropTargeted {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(theme.color, lineWidth: 3)
+                    .padding(3)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.12), value: isDropTargeted)
         .focusedSceneValue(\.playbackCommandsEnabled, !isSidebarSearchFocused)
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width

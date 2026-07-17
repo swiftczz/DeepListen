@@ -39,6 +39,7 @@ import Observation
 
     @ObservationIgnored private let player = AVPlayer()
     @ObservationIgnored private let fileRevealer: FileRevealing
+    @ObservationIgnored private let nowPlayingController = NowPlayingController()
 
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var playbackFinishedTask: Task<Void, Never>?
@@ -67,6 +68,7 @@ import Observation
         self.fileRevealer = fileRevealer
 
         configurePlayer()
+        configureNowPlaying()
         loadPersistedLibrary()
 
         if tracks.isEmpty {
@@ -221,12 +223,13 @@ import Observation
     ) {
         guard result.playableCount > 0 else { return }
 
-        tracks.append(contentsOf: result.addedTracks)
-        tracks.sort {
+        // 仅对新增批次按文件名排序后追加，保留用户手动调整过的既有顺序。
+        let sortedAddedTracks = result.addedTracks.sorted {
             $0.url.lastPathComponent.localizedStandardCompare($1.url.lastPathComponent)
                 == .orderedAscending
         }
-        refreshDurations(for: result.addedTracks)
+        tracks.append(contentsOf: sortedAddedTracks)
+        refreshDurations(for: sortedAddedTracks)
 
         if selectedTrackID == nil, let firstTrack = tracks.first {
             selectTrack(firstTrack.id, autoplay: false)
@@ -296,11 +299,13 @@ import Observation
 
         isPlaying = true
         player.playImmediately(atRate: Float(playbackRate))
+        updateNowPlaying()
     }
 
     func pause() {
         player.pause()
         isPlaying = false
+        updateNowPlaying()
     }
 
     func nextTrack() {
@@ -328,6 +333,7 @@ import Observation
             toleranceBefore: .zero,
             toleranceAfter: .zero
         )
+        updateNowPlaying()
     }
 
     func skip(by seconds: TimeInterval) {
@@ -353,6 +359,7 @@ import Observation
         if isPlaying {
             player.rate = Float(clamped)
         }
+        updateNowPlaying()
     }
 
     func setLoopStart() {
@@ -373,6 +380,12 @@ import Observation
     func clearLoop() {
         loopStart = nil
         loopEnd = nil
+    }
+
+    /// 拖拽排序：移动曲目并持久化手动顺序。仅在未过滤（完整列表）时调用。
+    func moveTracks(fromOffsets source: IndexSet, toOffset destination: Int) {
+        tracks.move(fromOffsets: source, toOffset: destination)
+        persistLibrary()
     }
 
     func removeTrack(_ id: ListeningTrack.ID) {
@@ -461,6 +474,35 @@ import Observation
         }
     }
 
+    private func configureNowPlaying() {
+        nowPlayingController.configure(
+            handlers: NowPlayingController.Handlers(
+                play: { [weak self] in self?.play() },
+                pause: { [weak self] in self?.pause() },
+                toggle: { [weak self] in self?.togglePlayPause() },
+                next: { [weak self] in self?.nextTrack() },
+                previous: { [weak self] in self?.previousTrack() },
+                skip: { [weak self] seconds in self?.skip(by: seconds) },
+                seek: { [weak self] target in self?.seek(to: target) }
+            )
+        )
+    }
+
+    private func updateNowPlaying() {
+        guard let selectedTrack else {
+            nowPlayingController.clear()
+            return
+        }
+
+        nowPlayingController.update(
+            title: selectedTrack.title,
+            isPlaying: isPlaying,
+            currentTime: currentTime,
+            duration: duration,
+            rate: playbackRate
+        )
+    }
+
     private func showLibraryNotice(_ message: String, kind: LibraryNotice.Kind) {
         libraryNoticeTask?.cancel()
         let notice = LibraryNotice(message: message, kind: kind)
@@ -483,6 +525,7 @@ import Observation
             subtitleLoadState = .idle
             currentTime = 0
             duration = 0
+            nowPlayingController.clear()
             return
         }
 
@@ -495,6 +538,7 @@ import Observation
         loadSubtitles(for: selectedTrack)
 
         refreshDurations(for: [selectedTrack])
+        updateNowPlaying()
 
         if autoplay {
             play()
