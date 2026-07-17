@@ -8,7 +8,6 @@ struct ContentView: View {
     @State private var isApplyingAutomaticColumnVisibility = false
     @State private var showsMediaImporter = false
     @State private var showsThemePopover = false
-    @FocusState private var isPlaybackKeyFocused: Bool
     @FocusState private var isSidebarSearchFocused: Bool
 
     private let sidebarAutoHideWidth: CGFloat = 820
@@ -35,19 +34,7 @@ struct ContentView: View {
         .navigationTitle("DeepListen")
         .frame(minWidth: 800, minHeight: 640)
         .tint(theme.color)
-        .focusable()
-        .focused($isPlaybackKeyFocused)
-        .onAppear {
-            isPlaybackKeyFocused = true
-        }
-        .onChange(of: isSidebarSearchFocused) { _, isFocused in
-            if !isFocused {
-                isPlaybackKeyFocused = true
-            }
-        }
-        .onKeyPress(.space, phases: .down) { keyPress in
-            handlePlaybackKeyPress(keyPress)
-        }
+        .focusedSceneValue(\.playbackCommandsEnabled, !isSidebarSearchFocused)
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width
         } action: { _, width in
@@ -73,9 +60,15 @@ struct ContentView: View {
                 Button {
                     showsMediaImporter = true
                 } label: {
-                    Label("添加音视频", systemImage: "plus")
+                    Label(
+                        player.isImporting ? "正在导入" : "添加音视频",
+                        systemImage: player.isImporting
+                            ? "arrow.triangle.2.circlepath"
+                            : "plus"
+                    )
                 }
-                .help("添加音视频")
+                .help(player.isImporting ? "正在导入音视频" : "添加音视频")
+                .disabled(player.isImporting)
 
                 Button {
                     showsThemePopover.toggle()
@@ -93,15 +86,18 @@ struct ContentView: View {
             allowedContentTypes: PlayerStore.importableContentTypes,
             allowsMultipleSelection: true
         ) { result in
-            if case let .success(urls) = result {
+            switch result {
+            case let .success(urls):
                 player.openExternalURLs(urls)
+            case let .failure(error):
+                player.reportImportFailure(error)
             }
         }
         .overlay(alignment: .top) {
             if let libraryNotice = player.libraryNotice {
-                Label(libraryNotice, systemImage: "checkmark.circle.fill")
+                Label(libraryNotice.message, systemImage: libraryNotice.systemImage)
                     .font(.callout.weight(.medium))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(noticeColor(for: libraryNotice))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
                     .background(.regularMaterial, in: Capsule())
@@ -127,12 +123,14 @@ struct ContentView: View {
         columnVisibility = visibility
     }
 
-    private func handlePlaybackKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
-        guard keyPress.modifiers.isEmpty, !isSidebarSearchFocused else {
-            return .ignored
+    private func noticeColor(for notice: LibraryNotice) -> Color {
+        switch notice.kind {
+        case .success:
+            return .primary
+        case .warning:
+            return .orange
+        case .failure:
+            return .red
         }
-
-        player.togglePlayPause()
-        return .handled
     }
 }

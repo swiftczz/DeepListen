@@ -1,7 +1,6 @@
 import AVFoundation
 import Foundation
 import Observation
-import UniformTypeIdentifiers
 
 @MainActor
 @Observable final class PlayerStore {
@@ -30,7 +29,9 @@ import UniformTypeIdentifiers
     }
     private(set) var subtitleCues: [SubtitleCue] = []
     private(set) var currentSubtitleIndex: Int?
-    var libraryNotice: String?
+    private(set) var subtitleLoadState: SubtitleLoadState = .idle
+    private(set) var isImporting = false
+    var libraryNotice: LibraryNotice?
     var loopStart: TimeInterval?
     var loopEnd: TimeInterval?
 
@@ -41,17 +42,10 @@ import UniformTypeIdentifiers
     @ObservationIgnored private var playbackFinishedTask: Task<Void, Never>?
     @ObservationIgnored private var libraryNoticeTask: Task<Void, Never>?
     @ObservationIgnored private var subtitleLoadTask: Task<Void, Never>?
+    @ObservationIgnored private var importTask: Task<Void, Never>?
     @ObservationIgnored private var durationLoadTasks: [ListeningTrack.ID: Task<Void, Never>] = [:]
 
-    private static let playableMediaExtensions = [
-        "mp3", "m4a", "aac", "wav", "aiff", "aif", "caf", "flac",
-        "mp4", "m4v", "mov", "avi", "mkv",
-    ]
-    private static let playableMediaExtensionSet = Set(playableMediaExtensions)
-    private static let playableMediaContentTypes = playableMediaExtensions.compactMap {
-        UTType(filenameExtension: $0)
-    }
-    static let importableContentTypes = playableMediaContentTypes + [.folder]
+    static let importableContentTypes = MediaDiscoveryService.importableContentTypes
 
     private enum Keys {
         static let storedTracks = "libraryTracks"
@@ -90,6 +84,7 @@ import UniformTypeIdentifiers
         playbackFinishedTask?.cancel()
         libraryNoticeTask?.cancel()
         subtitleLoadTask?.cancel()
+        importTask?.cancel()
         durationLoadTasks.values.forEach { $0.cancel() }
 
         if let timeObserver {
@@ -163,62 +158,94 @@ import UniformTypeIdentifiers
         }
     }
 
-    @discardableResult
-    func addURLs(_ urls: [URL], autoplayFirst: Bool) -> [ListeningTrack] {
-        let mediaURLs = Self.discoverPlayableMediaURLs(from: urls)
-        guard !mediaURLs.isEmpty else { return [] }
+    func openExternalURLs(_ urls: [URL]) {
+        startImport(urls, autoplayFirst: true, announcesResult: true)
+    }
 
-        var firstTargetID: UUID?
-        var addedTracks: [ListeningTrack] = []
-        var knownMediaIDsByKey = Self.mediaIDsByKey(for: tracks)
+    func reportImportFailure(_ error: Error) {
+        showLibraryNotice(
+            "导入失败：\(error.localizedDescription)",
+            kind: .failure
+        )
+    }
 
-        for mediaURL in mediaURLs {
-            let mediaKey = Self.mediaIdentityKey(for: mediaURL)
-
-            if let existingTrackID = knownMediaIDsByKey[mediaKey] {
-                if firstTargetID == nil {
-                    firstTargetID = existingTrackID
-                }
-                continue
+    private func startImport(
+        _ urls: [URL],
+        autoplayFirst: Bool,
+        announcesResult: Bool
+    ) {
+        guard !urls.isEmpty else { return }
+        guard !isImporting else {
+            if announcesResult {
+                showLibraryNotice("正在导入，请稍候", kind: .warning)
             }
-
-            let track = ListeningTrack(url: mediaURL)
-            addedTracks.append(track)
-            knownMediaIDsByKey[mediaKey] = track.id
-            if firstTargetID == nil {
-                firstTargetID = track.id
-            }
+            return
         }
 
-        guard !addedTracks.isEmpty || firstTargetID != nil else { return [] }
+        isImporting = true
+        let existingTracks = tracks
 
-        tracks.append(contentsOf: addedTracks)
+        importTask = Task { [weak self, urls, existingTracks] in
+            let discoveryTask = Task.detached(priority: .userInitiated) {
+                MediaDiscoveryService.discover(
+                    from: urls,
+                    existingTracks: existingTracks
+                )
+            }
+
+            let result = await withTaskCancellationHandler {
+                await discoveryTask.value
+            } onCancel: {
+                discoveryTask.cancel()
+            }
+
+            guard let self else { return }
+            defer {
+                isImporting = false
+                importTask = nil
+            }
+            guard !Task.isCancelled else { return }
+
+            applyImportResult(result, autoplayFirst: autoplayFirst)
+            if announcesResult {
+                announceImportResult(result)
+            }
+        }
+    }
+
+    private func applyImportResult(
+        _ result: MediaDiscoveryResult,
+        autoplayFirst: Bool
+    ) {
+        guard result.playableCount > 0 else { return }
+
+        tracks.append(contentsOf: result.addedTracks)
         tracks.sort {
             $0.url.lastPathComponent.localizedStandardCompare($1.url.lastPathComponent)
                 == .orderedAscending
         }
-        refreshDurations(for: addedTracks)
+        refreshDurations(for: result.addedTracks)
 
         if selectedTrackID == nil, let firstTrack = tracks.first {
             selectTrack(firstTrack.id, autoplay: false)
         }
 
-        if autoplayFirst, let firstTargetID {
+        if autoplayFirst, let firstTargetID = result.firstTargetID {
             selectTrack(firstTargetID, autoplay: true)
         }
 
         persistLibrary()
-        return addedTracks
     }
 
-    func openExternalURLs(_ urls: [URL]) {
-        let addedTracks = addURLs(urls, autoplayFirst: true)
-        if addedTracks.isEmpty {
-            showLibraryNotice("已切换到已存在音频")
-        } else if addedTracks.count == 1, let title = addedTracks.first?.title {
-            showLibraryNotice("已添加：\(title)")
+    private func announceImportResult(_ result: MediaDiscoveryResult) {
+        if result.playableCount == 0 {
+            showLibraryNotice("未找到可导入的音视频", kind: .warning)
+        } else if result.addedTracks.isEmpty {
+            showLibraryNotice("已切换到列表中的音频", kind: .success)
+        } else if result.addedTracks.count == 1, let title = result.addedTracks.first?.title {
+            showLibraryNotice("已添加：\(title)", kind: .success)
         } else {
-            showLibraryNotice("已添加 \(addedTracks.count) 个音频")
+            showLibraryNotice("已添加 \(result.addedTracks.count) 个音频", kind: .success)
         }
     }
 
@@ -334,10 +361,7 @@ import UniformTypeIdentifiers
     }
 
     func setLoopEnd() {
-        guard let loopStart else {
-            self.loopStart = currentTime
-            return
-        }
+        guard let loopStart else { return }
 
         if currentTime > loopStart {
             loopEnd = currentTime
@@ -383,12 +407,16 @@ import UniformTypeIdentifiers
     }
 
     func clearLibrary() {
+        importTask?.cancel()
+        importTask = nil
+        isImporting = false
         pause()
         player.replaceCurrentItem(with: nil)
         tracks.removeAll()
         selectedTrackID = nil
         subtitleCues.removeAll()
         currentSubtitleIndex = nil
+        subtitleLoadState = .idle
         currentTime = 0
         duration = 0
         loopStart = nil
@@ -399,9 +427,6 @@ import UniformTypeIdentifiers
     func reloadDefaultLibrary() {
         clearLibrary()
         addDefaultAudioIfAvailable()
-        if let firstTrack = tracks.first {
-            selectTrack(firstTrack.id, autoplay: false)
-        }
     }
 
     func revealInFinder(_ track: ListeningTrack) {
@@ -409,7 +434,7 @@ import UniformTypeIdentifiers
     }
 
     static func isPlayableMediaURL(_ url: URL) -> Bool {
-        playableMediaExtensionSet.contains(url.pathExtension.lowercased())
+        MediaDiscoveryService.isPlayableMediaURL(url)
     }
 
     private func configurePlayer() {
@@ -434,14 +459,15 @@ import UniformTypeIdentifiers
         }
     }
 
-    private func showLibraryNotice(_ message: String) {
+    private func showLibraryNotice(_ message: String, kind: LibraryNotice.Kind) {
         libraryNoticeTask?.cancel()
-        libraryNotice = message
+        let notice = LibraryNotice(message: message, kind: kind)
+        libraryNotice = notice
 
         libraryNoticeTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2.2))
             guard !Task.isCancelled, let self else { return }
-            if libraryNotice == message {
+            if libraryNotice == notice {
                 libraryNotice = nil
             }
         }
@@ -452,6 +478,7 @@ import UniformTypeIdentifiers
             player.replaceCurrentItem(with: nil)
             subtitleCues.removeAll()
             currentSubtitleIndex = nil
+            subtitleLoadState = .idle
             currentTime = 0
             duration = 0
             return
@@ -478,11 +505,13 @@ import UniformTypeIdentifiers
         guard let subtitleURL = track.subtitleURL else {
             subtitleCues = []
             currentSubtitleIndex = nil
+            subtitleLoadState = .missing
             return
         }
 
         subtitleCues = []
         currentSubtitleIndex = nil
+        subtitleLoadState = .loading
 
         let trackID = track.id
         subtitleLoadTask = Task.detached { [subtitleURL, trackID] in
@@ -492,6 +521,7 @@ import UniformTypeIdentifiers
             await MainActor.run { [weak self] in
                 guard let self, selectedTrackID == trackID else { return }
                 subtitleCues = cues
+                subtitleLoadState = cues.isEmpty ? .failed : .loaded
                 updateSubtitleIndex(at: currentTime)
                 subtitleLoadTask = nil
             }
@@ -648,7 +678,11 @@ import UniformTypeIdentifiers
             return
         }
 
-        addURLs([defaultAudioDirectory], autoplayFirst: false)
+        startImport(
+            [defaultAudioDirectory],
+            autoplayFirst: false,
+            announcesResult: false
+        )
     }
 
     private func refreshDurations(for tracks: [ListeningTrack]) {
@@ -680,64 +714,10 @@ import UniformTypeIdentifiers
         }
     }
 
-    private static func discoverPlayableMediaURLs(from urls: [URL]) -> [URL] {
-        var mediaURLs: [URL] = []
-        let fileManager = FileManager.default
-
-        for url in urls {
-            guard let resourceValues = try? url.resourceValues(forKeys: [.isDirectoryKey]) else {
-                continue
-            }
-
-            if resourceValues.isDirectory == true {
-                let keys: [URLResourceKey] = [.isRegularFileKey, .isHiddenKey]
-                guard
-                    let enumerator = fileManager.enumerator(
-                        at: url,
-                        includingPropertiesForKeys: keys,
-                        options: [.skipsHiddenFiles, .skipsPackageDescendants]
-                    )
-                else {
-                    continue
-                }
-
-                for case let childURL as URL in enumerator {
-                    guard
-                        let values = try? childURL.resourceValues(forKeys: Set(keys)),
-                        values.isRegularFile == true,
-                        values.isHidden != true,
-                        isPlayableMediaURL(childURL)
-                    else {
-                        continue
-                    }
-                    mediaURLs.append(childURL)
-                }
-            } else if isPlayableMediaURL(url) {
-                mediaURLs.append(url)
-            }
-        }
-
-        return mediaURLs.sorted {
-            $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending
-        }
-    }
-
-    private static func mediaIdentityKey(for url: URL) -> String {
-        let fileSize = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? -1
-        return "\(url.lastPathComponent.lowercased())#\(fileSize)"
-    }
-
-    private static func mediaIDsByKey(for tracks: [ListeningTrack]) -> [String: ListeningTrack.ID] {
-        Dictionary(
-            tracks.map { (mediaIdentityKey(for: $0.url), $0.id) },
-            uniquingKeysWith: { firstID, _ in firstID }
-        )
-    }
-
     private static func deduplicatedTracks(_ tracks: [ListeningTrack]) -> [ListeningTrack] {
         var knownMediaKeys = Set<String>()
         return tracks.filter { track in
-            knownMediaKeys.insert(mediaIdentityKey(for: track.url)).inserted
+            knownMediaKeys.insert(MediaDiscoveryService.mediaIdentityKey(for: track.url)).inserted
         }
     }
 

@@ -1,6 +1,6 @@
 import Foundation
 
-struct ListeningTrack: Identifiable, Codable, Hashable {
+struct ListeningTrack: Identifiable, Codable, Hashable, Sendable {
     let id: UUID
     var url: URL
     var title: String
@@ -51,7 +51,7 @@ struct ListeningTrack: Identifiable, Codable, Hashable {
     }
 }
 
-enum MediaKind: String, Codable {
+enum MediaKind: String, Codable, Sendable {
     case audio
     case video
 

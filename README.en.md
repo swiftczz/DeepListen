@@ -51,14 +51,14 @@ A macOS player built for focused English listening practice. Import any subtitle
 | Shortcut | Action |
 | --- | --- |
 | `Space` | Play / Pause |
-| `P` | Previous track |
-| `N` | Next track |
-| `←` | Rewind 5s |
-| `→` | Forward 5s |
-| `A` | Set A point |
-| `B` | Set B point |
-| `Esc` | Clear A/B segment |
-| `S` | Toggle subtitles |
+| `⌘⇧←` | Previous track |
+| `⌘⇧→` | Next track |
+| `⌘⌥←` | Rewind 5s |
+| `⌘⌥→` | Forward 5s |
+| `⌘⌥A` | Set A point |
+| `⌘⌥B` | Set B point |
+| `⌘⌥Esc` | Clear A/B segment |
+| `⌘⌥S` | Toggle subtitles |
 
 ## Subtitle Matching
 

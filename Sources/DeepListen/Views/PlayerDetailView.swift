@@ -10,19 +10,28 @@ struct PlayerDetailView: View {
                 GeometryReader { proxy in
                     let horizontalPadding = proxy.size.width < 720 ? 24.0 : 42.0
 
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 32) {
-                            HeaderView(track: track, theme: theme)
+                    VStack(spacing: 0) {
+                        VStack(alignment: .leading, spacing: 24) {
+                            HeaderView(track: track)
                             TransportBarView(theme: theme)
                             ABLoopView(theme: theme)
-                            SubtitleView(theme: theme)
                         }
                         .frame(maxWidth: 1120, alignment: .leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.horizontal, horizontalPadding)
-                        .padding(.vertical, 42)
+                        .padding(.top, 28)
+                        .padding(.bottom, 24)
+
+                        Divider()
+
+                        ScrollView {
+                            SubtitleView(theme: theme)
+                                .frame(maxWidth: 1120, alignment: .leading)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.horizontal, horizontalPadding)
+                                .padding(.vertical, 24)
+                        }
                     }
-                    .background(.background)
                 }
             } else {
                 ContentUnavailableView(
@@ -37,7 +46,6 @@ struct PlayerDetailView: View {
 
 private struct HeaderView: View {
     var track: ListeningTrack
-    var theme: AppThemeColor
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -49,8 +57,8 @@ private struct HeaderView: View {
             HStack(spacing: 18) {
                 Label((track.duration ?? 0).formattedPlaybackTime, systemImage: "clock")
                 Label("\(track.fileExtension) · \(track.mediaKind.label)", systemImage: "music.note")
-                if track.subtitleURL != nil {
-                    Label("SRT", systemImage: "captions.bubble")
+                if let subtitleURL = track.subtitleURL {
+                    Label(subtitleURL.pathExtension.uppercased(), systemImage: "captions.bubble")
                 }
             }
             .font(.callout)
@@ -321,6 +329,7 @@ private struct ABLoopView: View {
             } label: {
                 Label("设 B", systemImage: "b.circle")
             }
+            .disabled(player.loopStart == nil)
 
             Button {
                 player.clearLoop()
@@ -373,37 +382,67 @@ private struct SubtitleView: View {
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 18)
-            } else if player.subtitleCues.isEmpty {
-                Text("未找到与当前媒体同名的 .srt 字幕")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 18)
-            } else if displayMode == .transcript {
-                transcriptView
             } else {
-                VStack(alignment: .leading, spacing: 16) {
-                    if player.showSubtitleContext, let previousSubtitle = player.previousSubtitle {
-                        Text(previousSubtitle.text)
-                            .font(.title3)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Text(player.currentSubtitle?.text ?? player.nextSubtitle?.text ?? " ")
-                        .font(.system(size: 28, weight: .semibold, design: .rounded))
-                        .foregroundStyle(player.currentSubtitle == nil ? Color.secondary : theme.color)
-                        .lineSpacing(8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    if player.showSubtitleContext, let nextSubtitle = player.nextSubtitle {
-                        Text(nextSubtitle.text)
-                            .font(.title3)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .textSelection(.enabled)
+                subtitleContent
             }
         }
+    }
+
+    @ViewBuilder
+    private var subtitleContent: some View {
+        switch player.subtitleLoadState {
+        case .idle, .missing:
+            subtitleStatus("未找到与当前媒体同名的 .srt 或 .vtt 字幕")
+        case .loading:
+            HStack(spacing: 10) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("正在加载字幕…")
+            }
+            .font(.title3)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 18)
+        case .failed:
+            subtitleStatus("字幕文件无法解析，请检查文件格式或编码")
+        case .loaded:
+            if displayMode == .transcript {
+                transcriptView
+            } else {
+                currentSubtitleView
+            }
+        }
+    }
+
+    private func subtitleStatus(_ message: String) -> some View {
+        Text(message)
+            .font(.title3)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 18)
+    }
+
+    private var currentSubtitleView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if player.showSubtitleContext, let previousSubtitle = player.previousSubtitle {
+                Text(previousSubtitle.text)
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(player.currentSubtitle?.text ?? player.nextSubtitle?.text ?? " ")
+                .font(.system(size: 28, weight: .semibold, design: .rounded))
+                .foregroundStyle(player.currentSubtitle == nil ? Color.secondary : theme.color)
+                .lineSpacing(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if player.showSubtitleContext, let nextSubtitle = player.nextSubtitle {
+                Text(nextSubtitle.text)
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .textSelection(.enabled)
     }
 
     private var subtitleControls: some View {
@@ -437,7 +476,7 @@ private struct SubtitleView: View {
         @Bindable var player = player
 
         return HStack(spacing: 12) {
-            if player.showSubtitles, !player.subtitleCues.isEmpty {
+            if player.showSubtitles, player.subtitleLoadState == .loaded {
                 Picker("字幕模式", selection: $displayMode) {
                     ForEach(SubtitleDisplayMode.allCases) { mode in
                         Text(mode.title).tag(mode)
