@@ -17,6 +17,8 @@ struct ThemeColorPopover: View {
                     }
                     .buttonStyle(.plain)
                     .help(theme.title)
+                    .accessibilityLabel(theme.title)
+                    .accessibilityValue(selection == theme ? "已选择" : "未选择")
                 }
             }
         }

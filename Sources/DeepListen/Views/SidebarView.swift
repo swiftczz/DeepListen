@@ -17,6 +17,12 @@ struct SidebarView: View {
         }
     }
 
+    private var displayNumbers: [ListeningTrack.ID: Int] {
+        Dictionary(uniqueKeysWithValues: player.tracks.enumerated().map { index, track in
+            (track.id, index + 1)
+        })
+    }
+
     var body: some View {
         Group {
             if player.tracks.isEmpty {
@@ -51,7 +57,7 @@ struct SidebarView: View {
                 ForEach(visibleTracks) { track in
                     TrackRow(
                         track: track,
-                        displayNumber: displayNumber(for: track),
+                        displayNumber: displayNumbers[track.id] ?? 0,
                         isSelected: selectedTrackIDs.contains(track.id),
                         isCurrentTrack: player.selectedTrackID == track.id,
                         isPlaying: player.selectedTrackID == track.id && player.isPlaying,
@@ -71,6 +77,12 @@ struct SidebarView: View {
         }
         .onDeleteCommand {
             performBatchRemove()
+        }
+        .onChange(of: selectedTrackIDs) { _, selection in
+            selectSingleTrack(selection)
+        }
+        .onChange(of: searchText) {
+            keepSelectionVisible()
         }
     }
 
@@ -108,13 +120,32 @@ struct SidebarView: View {
         }
     }
 
-    private func displayNumber(for track: ListeningTrack) -> Int {
-        ((player.tracks.firstIndex { $0.id == track.id }) ?? -1) + 1
-    }
-
     private func play(_ selection: Set<ListeningTrack.ID>) {
         guard selection.count == 1, let trackID = selection.first else { return }
         player.selectTrack(trackID, autoplay: true)
+    }
+
+    private func selectSingleTrack(_ selection: Set<ListeningTrack.ID>) {
+        guard selection.count == 1,
+            let trackID = selection.first,
+            player.selectedTrackID != trackID
+        else {
+            return
+        }
+
+        player.selectTrack(trackID, autoplay: false)
+    }
+
+    private func keepSelectionVisible() {
+        let visibleTrackIDs = Set(visibleTracks.map(\.id))
+        selectedTrackIDs.formIntersection(visibleTrackIDs)
+
+        if selectedTrackIDs.isEmpty,
+            let selectedTrackID = player.selectedTrackID,
+            visibleTrackIDs.contains(selectedTrackID)
+        {
+            selectedTrackIDs = [selectedTrackID]
+        }
     }
 
     private func performBatchRemove() {
@@ -196,9 +227,11 @@ private struct TrackRow: View {
             if isSelected {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(Color(nsColor: .unemphasizedSelectedContentBackgroundColor))
+                    .padding(.horizontal, -5)
+                    .padding(.vertical, -2)
             }
         }
-        .background(ListSelectionHighlightDisabler())
+        .background(NativeSelectionBackgroundDisabler())
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityValue(
@@ -213,28 +246,30 @@ private struct TrackRow: View {
     }
 }
 
-private struct ListSelectionHighlightDisabler: NSViewRepresentable {
-    func makeNSView(context: Context) -> SelectionHighlightProbeView {
-        SelectionHighlightProbeView()
+/// SwiftUI does not expose the native selection background of its macOS List.
+/// Selection behavior stays native while TrackRow provides the visible surface.
+private struct NativeSelectionBackgroundDisabler: NSViewRepresentable {
+    func makeNSView(context: Context) -> NativeSelectionBackgroundProbeView {
+        NativeSelectionBackgroundProbeView()
     }
 
-    func updateNSView(_ nsView: SelectionHighlightProbeView, context: Context) {
-        nsView.disableEnclosingTableSelectionHighlight()
+    func updateNSView(_ nsView: NativeSelectionBackgroundProbeView, context: Context) {
+        nsView.disableEnclosingTableSelectionBackground()
     }
 }
 
-private final class SelectionHighlightProbeView: NSView {
+private final class NativeSelectionBackgroundProbeView: NSView {
     override func viewDidMoveToSuperview() {
         super.viewDidMoveToSuperview()
-        disableEnclosingTableSelectionHighlight()
+        disableEnclosingTableSelectionBackground()
     }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        disableEnclosingTableSelectionHighlight()
+        disableEnclosingTableSelectionBackground()
     }
 
-    func disableEnclosingTableSelectionHighlight() {
+    func disableEnclosingTableSelectionBackground() {
         var ancestor = superview
         while let current = ancestor {
             if let tableView = current as? NSTableView {

@@ -11,6 +11,7 @@ struct ContentView: View {
     @FocusState private var isSidebarSearchFocused: Bool
 
     private let sidebarAutoHideWidth: CGFloat = 820
+    private let sidebarAutoShowWidth: CGFloat = 860
 
     private var theme: AppThemeColor {
         AppThemeColor(storedValue: storedTheme)
@@ -33,6 +34,7 @@ struct ContentView: View {
         }
         .navigationTitle("DeepListen")
         .frame(minWidth: 800, minHeight: 640)
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .tint(theme.color)
         .focusedSceneValue(\.playbackCommandsEnabled, !isSidebarSearchFocused)
         .onGeometryChange(for: CGFloat.self) { proxy in
@@ -103,6 +105,8 @@ struct ContentView: View {
                     .background(.regularMaterial, in: Capsule())
                     .shadow(color: .black.opacity(0.12), radius: 14, y: 6)
                     .padding(.top, 18)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(libraryNotice.message)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
@@ -112,7 +116,7 @@ struct ContentView: View {
     private func updateColumnVisibility(for width: CGFloat) {
         if width < sidebarAutoHideWidth {
             applyAutomaticColumnVisibility(.detailOnly)
-        } else if !userPrefersSidebarHidden {
+        } else if width > sidebarAutoShowWidth, !userPrefersSidebarHidden {
             applyAutomaticColumnVisibility(.all)
         }
     }

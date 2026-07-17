@@ -29,6 +29,8 @@ import Observation
     }
     private(set) var subtitleCues: [SubtitleCue] = []
     private(set) var currentSubtitleIndex: Int?
+    private(set) var previousSubtitleIndex: Int?
+    private(set) var nextSubtitleIndex: Int?
     private(set) var subtitleLoadState: SubtitleLoadState = .idle
     private(set) var isImporting = false
     var libraryNotice: LibraryNotice?
@@ -114,19 +116,19 @@ import Observation
     }
 
     var previousSubtitle: SubtitleCue? {
-        if let currentSubtitleIndex, currentSubtitleIndex > 0 {
-            return subtitleCues[currentSubtitleIndex - 1]
+        guard let previousSubtitleIndex,
+            subtitleCues.indices.contains(previousSubtitleIndex)
+        else {
+            return nil
         }
-
-        return subtitleCues.last { $0.end < currentTime }
+        return subtitleCues[previousSubtitleIndex]
     }
 
     var nextSubtitle: SubtitleCue? {
-        if let currentSubtitleIndex, subtitleCues.indices.contains(currentSubtitleIndex + 1) {
-            return subtitleCues[currentSubtitleIndex + 1]
+        guard let nextSubtitleIndex, subtitleCues.indices.contains(nextSubtitleIndex) else {
+            return nil
         }
-
-        return subtitleCues.first { $0.start > currentTime }
+        return subtitleCues[nextSubtitleIndex]
     }
 
     var loopSummary: String {
@@ -415,7 +417,7 @@ import Observation
         tracks.removeAll()
         selectedTrackID = nil
         subtitleCues.removeAll()
-        currentSubtitleIndex = nil
+        resetSubtitlePosition()
         subtitleLoadState = .idle
         currentTime = 0
         duration = 0
@@ -477,7 +479,7 @@ import Observation
         guard let selectedTrack else {
             player.replaceCurrentItem(with: nil)
             subtitleCues.removeAll()
-            currentSubtitleIndex = nil
+            resetSubtitlePosition()
             subtitleLoadState = .idle
             currentTime = 0
             duration = 0
@@ -504,13 +506,13 @@ import Observation
 
         guard let subtitleURL = track.subtitleURL else {
             subtitleCues = []
-            currentSubtitleIndex = nil
+            resetSubtitlePosition()
             subtitleLoadState = .missing
             return
         }
 
         subtitleCues = []
-        currentSubtitleIndex = nil
+        resetSubtitlePosition()
         subtitleLoadState = .loading
 
         let trackID = track.id
@@ -575,32 +577,25 @@ import Observation
 
     private func updateSubtitleIndex(at seconds: TimeInterval) {
         guard !subtitleCues.isEmpty else {
-            currentSubtitleIndex = nil
+            resetSubtitlePosition()
             return
         }
 
-        if let currentSubtitleIndex, subtitleCues.indices.contains(currentSubtitleIndex) {
-            let cue = subtitleCues[currentSubtitleIndex]
-            if cue.start <= seconds && seconds <= cue.end {
-                return
-            }
-
-            let adjacentIndex = seconds > cue.end
-                ? currentSubtitleIndex + 1
-                : currentSubtitleIndex - 1
-            if subtitleCues.indices.contains(adjacentIndex) {
-                let adjacentCue = subtitleCues[adjacentIndex]
-                if adjacentCue.start <= seconds && seconds <= adjacentCue.end {
-                    self.currentSubtitleIndex = adjacentIndex
-                    return
-                }
-            }
+        let position = subtitlePosition(at: seconds)
+        if currentSubtitleIndex != position.current {
+            currentSubtitleIndex = position.current
         }
-
-        currentSubtitleIndex = subtitleIndex(containing: seconds)
+        if previousSubtitleIndex != position.previous {
+            previousSubtitleIndex = position.previous
+        }
+        if nextSubtitleIndex != position.next {
+            nextSubtitleIndex = position.next
+        }
     }
 
-    private func subtitleIndex(containing seconds: TimeInterval) -> Int? {
+    private func subtitlePosition(
+        at seconds: TimeInterval
+    ) -> (current: Int?, previous: Int?, next: Int?) {
         var lowerBound = subtitleCues.startIndex
         var upperBound = subtitleCues.endIndex
 
@@ -613,11 +608,29 @@ import Observation
             } else if seconds > cue.end {
                 lowerBound = middleIndex + 1
             } else {
-                return middleIndex
+                let previousIndex = middleIndex > subtitleCues.startIndex
+                    ? middleIndex - 1
+                    : nil
+                let nextIndex = subtitleCues.indices.contains(middleIndex + 1)
+                    ? middleIndex + 1
+                    : nil
+                return (middleIndex, previousIndex, nextIndex)
             }
         }
 
-        return nil
+        let previousIndex = lowerBound > subtitleCues.startIndex
+            ? lowerBound - 1
+            : nil
+        let nextIndex = subtitleCues.indices.contains(lowerBound)
+            ? lowerBound
+            : nil
+        return (nil, previousIndex, nextIndex)
+    }
+
+    private func resetSubtitlePosition() {
+        currentSubtitleIndex = nil
+        previousSubtitleIndex = nil
+        nextSubtitleIndex = nil
     }
 
     private func loadPersistedLibrary() {

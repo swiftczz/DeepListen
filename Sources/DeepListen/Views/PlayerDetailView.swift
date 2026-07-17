@@ -2,36 +2,42 @@ import SwiftUI
 
 struct PlayerDetailView: View {
     @Environment(PlayerStore.self) private var player
+    @State private var detailWidth: CGFloat = 0
+
     var theme: AppThemeColor
+
+    private var horizontalPadding: CGFloat {
+        detailWidth < 720 ? 24 : 42
+    }
 
     var body: some View {
         Group {
             if let track = player.selectedTrack {
-                GeometryReader { proxy in
-                    let horizontalPadding = proxy.size.width < 720 ? 24.0 : 42.0
-
-                    VStack(spacing: 0) {
-                        VStack(alignment: .leading, spacing: 24) {
-                            HeaderView(track: track)
-                            TransportBarView(theme: theme)
-                            ABLoopView(theme: theme)
-                        }
-                        .frame(maxWidth: 1120, alignment: .leading)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.horizontal, horizontalPadding)
-                        .padding(.top, 28)
-                        .padding(.bottom, 24)
-
-                        Divider()
-
-                        ScrollView {
-                            SubtitleView(theme: theme)
-                                .frame(maxWidth: 1120, alignment: .leading)
-                                .frame(maxWidth: .infinity, alignment: .center)
-                                .padding(.horizontal, horizontalPadding)
-                                .padding(.vertical, 24)
-                        }
+                VStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 24) {
+                        PlayerHeaderView(track: track)
+                        TransportBarView(theme: theme)
+                        ABLoopView(theme: theme)
                     }
+                    .frame(maxWidth: 1120, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.horizontal, horizontalPadding)
+                    .padding(.top, 28)
+                    .padding(.bottom, 24)
+
+                    ScrollView {
+                        SubtitleView(theme: theme)
+                            .frame(maxWidth: 1120, alignment: .leading)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.horizontal, horizontalPadding)
+                            .padding(.vertical, 24)
+                    }
+                    .scrollEdgeEffectStyle(.soft, for: .top)
+                }
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.size.width
+                } action: { _, width in
+                    detailWidth = width
                 }
             } else {
                 ContentUnavailableView(
@@ -44,507 +50,60 @@ struct PlayerDetailView: View {
     }
 }
 
-private struct HeaderView: View {
+private struct PlayerHeaderView: View {
     var track: ListeningTrack
+
+    private var durationText: String {
+        guard let duration = track.duration, duration.isFinite, duration >= 1 else {
+            return "--:--"
+        }
+        return duration.formattedPlaybackTime
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(track.title)
-                .font(.custom("Avenir", size: 40).weight(.semibold))
+                .font(.largeTitle.weight(.semibold))
+                .fontDesign(.rounded)
                 .lineLimit(2)
-                .minimumScaleFactor(0.75)
 
-            HStack(spacing: 18) {
-                Label((track.duration ?? 0).formattedPlaybackTime, systemImage: "clock")
-                Label("\(track.fileExtension) · \(track.mediaKind.label)", systemImage: "music.note")
-                if let subtitleURL = track.subtitleURL {
-                    Label(subtitleURL.pathExtension.uppercased(), systemImage: "captions.bubble")
-                }
+            ViewThatFits(in: .horizontal) {
+                metadataRow
+                metadataColumn
             }
             .font(.callout)
             .foregroundStyle(.secondary)
         }
     }
-}
 
-private struct TransportBarView: View {
-    @Environment(PlayerStore.self) private var player
-    @State private var showsSpeedPopover = false
-
-    var theme: AppThemeColor
-
-    private var remainingTime: TimeInterval {
-        max(player.duration - player.currentTime, 0)
-    }
-
-    var body: some View {
-        @Bindable var player = player
-
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 14) {
-                timeline
-                remainingTimeLabel
-                playbackOptions
-                transportButtons
-            }
-
-            VStack(alignment: .leading, spacing: 12) {
-                timeline
-                    .frame(maxWidth: .infinity)
-
-                HStack(spacing: 14) {
-                    remainingTimeLabel
-                    Spacer(minLength: 0)
-                    playbackOptions
-                    transportButtons
-                }
-            }
+    private var metadataRow: some View {
+        HStack(spacing: 18) {
+            durationLabel
+            mediaLabel
+            subtitleLabel
         }
     }
 
-    private var timeline: some View {
-        @Bindable var player = player
-
-        return ABTimelineSlider(
-            value: $player.seekTime,
-            duration: max(player.duration, 1),
-            loopStart: player.loopStart,
-            loopEnd: player.loopEnd,
-            theme: theme
-        )
-        .frame(minWidth: 240)
-        .frame(height: 46)
-        .offset(y: 13)
-    }
-
-    private var remainingTimeLabel: some View {
-        Text(remainingTime.formattedPlaybackTime)
-            .monospacedDigit()
-            .font(.headline)
-            .foregroundStyle(.secondary)
-            .frame(width: 56, alignment: .trailing)
-            .help("剩余时间")
-    }
-
-    private var playbackOptions: some View {
-        @Bindable var player = player
-
-        return HStack(spacing: 14) {
-            IconButton(systemImage: player.playbackMode.systemImage, theme: theme, isProminent: false) {
-                player.togglePlaybackMode()
-            }
-            .help("播放模式：\(player.playbackMode.title)")
-
-            IconButton(systemImage: "speedometer", theme: theme, isProminent: false) {
-                showsSpeedPopover.toggle()
-            }
-            .help(String(format: "倍速 %.2fx", player.playbackRate))
-            .popover(isPresented: $showsSpeedPopover, arrowEdge: .bottom) {
-                SpeedPopover(rateBinding: $player.playbackRateSelection, rate: player.playbackRate, theme: theme)
-            }
-        }
-        .fixedSize()
-    }
-
-    private var transportButtons: some View {
-        HStack(spacing: 10) {
-            IconButton(systemImage: "gobackward.5", theme: theme, isProminent: false) {
-                player.skip(by: -5)
-            }
-            .help("后退 5 秒")
-
-            IconButton(systemImage: player.isPlaying ? "pause.fill" : "play.fill", theme: theme, isProminent: true) {
-                player.togglePlayPause()
-            }
-            .help(player.isPlaying ? "暂停" : "播放")
-
-            IconButton(systemImage: "goforward.5", theme: theme, isProminent: false) {
-                player.skip(by: 5)
-            }
-            .help("前进 5 秒")
-        }
-        .fixedSize()
-    }
-
-}
-
-private struct ABTimelineSlider: View {
-    @Binding var value: Double
-    var duration: TimeInterval
-    var loopStart: TimeInterval?
-    var loopEnd: TimeInterval?
-    var theme: AppThemeColor
-
-    @State private var width: CGFloat = 0
-
-    var body: some View {
-        ZStack(alignment: .leading) {
-            Slider(value: $value, in: 0...duration)
-                .tint(theme.color)
-
-            if let loopStart {
-                marker(label: "A", time: loopStart)
-            }
-
-            if let loopEnd {
-                marker(label: "B", time: loopEnd)
-            }
-
-            if let loopStart, let loopEnd, loopEnd > loopStart {
-                loopRange(start: loopStart, end: loopEnd)
-            }
-        }
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            proxy.size.width
-        } action: { _, newWidth in
-            width = newWidth
+    private var metadataColumn: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            durationLabel
+            mediaLabel
+            subtitleLabel
         }
     }
 
-    private func position(for time: TimeInterval) -> CGFloat {
-        guard duration > 0 else { return 0 }
-        return min(max(CGFloat(time / duration) * width, 0), width)
+    private var durationLabel: some View {
+        Label(durationText, systemImage: "clock")
     }
 
-    private func marker(label: String, time: TimeInterval) -> some View {
-        VStack(spacing: 2) {
-            Text(label)
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(theme.color)
-            Capsule()
-                .fill(theme.color)
-                .frame(width: 3, height: 14)
-        }
-        .offset(x: min(max(position(for: time) - 7, 0), width - 14), y: -3)
-        .allowsHitTesting(false)
-    }
-
-    private func loopRange(start: TimeInterval, end: TimeInterval) -> some View {
-        let startX = position(for: start)
-        let endX = position(for: end)
-
-        return Capsule()
-            .fill(theme.color.opacity(0.28))
-            .frame(width: max(endX - startX, 0), height: 5)
-            .offset(x: startX, y: 22)
-            .allowsHitTesting(false)
-    }
-}
-
-private struct SpeedPopover: View {
-    var rateBinding: Binding<Double>
-    var rate: Double
-    var theme: AppThemeColor
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(String(format: "%.2fx", rate))
-                .font(.title3.monospacedDigit().weight(.semibold))
-                .foregroundStyle(theme.color)
-
-            Slider(value: rateBinding, in: 0.25...2.0, step: 0.25)
-                .tint(theme.color)
-                .frame(width: 220)
-
-            HStack {
-                Text("0.25x")
-                Spacer()
-                Text("2.00x")
-            }
-            .font(.caption.monospacedDigit())
-            .foregroundStyle(.secondary)
-        }
-        .padding(16)
-    }
-}
-
-private struct IconButton: View {
-    var systemImage: String
-    var theme: AppThemeColor
-    var isProminent: Bool
-    var action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(isProminent ? theme.selectionForegroundColor : Color.secondary)
-                .frame(width: 46, height: 46)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(isProminent ? theme.color : Color.secondary.opacity(0.10))
-                )
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-private struct ABLoopView: View {
-    @Environment(PlayerStore.self) private var player
-    var theme: AppThemeColor
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            ViewThatFits(in: .horizontal) {
-                HStack {
-                    loopSummary
-                    Spacer()
-                    loopButtons
-                }
-
-                VStack(alignment: .leading, spacing: 14) {
-                    loopSummary
-                    loopButtons
-                }
-            }
-
-            if let loopStart = player.loopStart {
-                loopMarkers(loopStart: loopStart)
-            }
-        }
-        .padding(14)
-        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-
-    private var loopSummary: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text("A/B 片段练习")
-                .font(.callout.weight(.semibold))
-            Text(player.loopSummary)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var loopButtons: some View {
-        HStack(spacing: 10) {
-            Button {
-                player.setLoopStart()
-            } label: {
-                Label("设 A", systemImage: "a.circle")
-            }
-
-            Button {
-                player.setLoopEnd()
-            } label: {
-                Label("设 B", systemImage: "b.circle")
-            }
-            .disabled(player.loopStart == nil)
-
-            Button {
-                player.clearLoop()
-            } label: {
-                Label("清除", systemImage: "xmark.circle")
-            }
-            .disabled(player.loopStart == nil && player.loopEnd == nil)
-        }
-    }
-
-    private func loopMarkers(loopStart: TimeInterval) -> some View {
-        HStack(spacing: 10) {
-            Capsule()
-                .fill(theme.color)
-                .frame(width: 22, height: 6)
-
-            Text("A \(loopStart.formattedPlaybackTime)")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            if let loopEnd = player.loopEnd {
-                Text("B \(loopEnd.formattedPlaybackTime)")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-}
-
-private struct SubtitleView: View {
-    @Environment(PlayerStore.self) private var player
-    @State private var displayMode: SubtitleDisplayMode = .current
-    var theme: AppThemeColor
-
-    var body: some View {
-        @Bindable var player = player
-        VStack(alignment: .leading, spacing: 22) {
-            ViewThatFits(in: .horizontal) {
-                subtitleControls
-
-                VStack(alignment: .leading, spacing: 12) {
-                    subtitleTitle
-                    subtitleControlsGroup
-                }
-            }
-
-            if !player.showSubtitles {
-                Text("字幕已隐藏")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 18)
-            } else {
-                subtitleContent
-            }
-        }
+    private var mediaLabel: some View {
+        Label("\(track.fileExtension) · \(track.mediaKind.label)", systemImage: "music.note")
     }
 
     @ViewBuilder
-    private var subtitleContent: some View {
-        switch player.subtitleLoadState {
-        case .idle, .missing:
-            subtitleStatus("未找到与当前媒体同名的 .srt 或 .vtt 字幕")
-        case .loading:
-            HStack(spacing: 10) {
-                ProgressView()
-                    .controlSize(.small)
-                Text("正在加载字幕…")
-            }
-            .font(.title3)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 18)
-        case .failed:
-            subtitleStatus("字幕文件无法解析，请检查文件格式或编码")
-        case .loaded:
-            if displayMode == .transcript {
-                transcriptView
-            } else {
-                currentSubtitleView
-            }
-        }
-    }
-
-    private func subtitleStatus(_ message: String) -> some View {
-        Text(message)
-            .font(.title3)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 18)
-    }
-
-    private var currentSubtitleView: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            if player.showSubtitleContext, let previousSubtitle = player.previousSubtitle {
-                Text(previousSubtitle.text)
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-            }
-
-            Text(player.currentSubtitle?.text ?? player.nextSubtitle?.text ?? " ")
-                .font(.system(size: 28, weight: .semibold, design: .rounded))
-                .foregroundStyle(player.currentSubtitle == nil ? Color.secondary : theme.color)
-                .lineSpacing(8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            if player.showSubtitleContext, let nextSubtitle = player.nextSubtitle {
-                Text(nextSubtitle.text)
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .textSelection(.enabled)
-    }
-
-    private var subtitleControls: some View {
-        HStack(spacing: 12) {
-            subtitleTitle
-
-            Spacer()
-
-            subtitleControlsGroup
-        }
-    }
-
-    private var subtitleTitle: some View {
-        Button {
-            player.showSubtitles.toggle()
-        } label: {
-            Image(systemName: "captions.bubble")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(player.showSubtitles ? theme.selectionForegroundColor : Color.secondary)
-                .frame(width: 36, height: 36)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(player.showSubtitles ? theme.color : Color.secondary.opacity(0.10))
-                )
-        }
-        .buttonStyle(.plain)
-        .help("字幕")
-    }
-
-    private var subtitleControlsGroup: some View {
-        @Bindable var player = player
-
-        return HStack(spacing: 12) {
-            if player.showSubtitles, player.subtitleLoadState == .loaded {
-                Picker("字幕模式", selection: $displayMode) {
-                    ForEach(SubtitleDisplayMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 150)
-
-                Toggle("上下文", isOn: $player.showSubtitleContext)
-                    .toggleStyle(.switch)
-                    .disabled(displayMode == .transcript)
-            }
-        }
-        .fixedSize()
-    }
-
-    private var transcriptView: some View {
-        LazyVStack(alignment: .leading, spacing: 8) {
-            ForEach(player.subtitleCues) { cue in
-                Button {
-                    player.jumpToSubtitle(cue)
-                } label: {
-                    HStack(alignment: .top, spacing: 12) {
-                        Text(cue.start.formattedPlaybackTime)
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .frame(width: 44, alignment: .leading)
-
-                        Text(cue.text)
-                            .font(.body)
-                            .foregroundStyle(isCurrent(cue) ? theme.color : Color.primary)
-                            .lineLimit(nil)
-                            .multilineTextAlignment(.leading)
-
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 9)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(isCurrent(cue) ? theme.color.opacity(0.10) : Color.clear)
-                    )
-                }
-                .buttonStyle(.plain)
-                .help("跳转到 \(cue.start.formattedPlaybackTime)")
-            }
-        }
-        .textSelection(.enabled)
-    }
-
-    private func isCurrent(_ cue: SubtitleCue) -> Bool {
-        cue.start <= player.currentTime && player.currentTime <= cue.end
-    }
-}
-
-private enum SubtitleDisplayMode: String, CaseIterable, Identifiable {
-    case current
-    case transcript
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .current:
-            return "当前句"
-        case .transcript:
-            return "全文稿"
+    private var subtitleLabel: some View {
+        if let subtitleURL = track.subtitleURL {
+            Label(subtitleURL.pathExtension.uppercased(), systemImage: "captions.bubble")
         }
     }
 }
