@@ -138,6 +138,8 @@ struct SidebarView: View {
         player.selectTrack(trackID, autoplay: true)
     }
 
+    /// 单选切换曲目时保留播放状态：正在播放则继续播放新曲目（与上一首/下一首一致），
+    /// 暂停中则静默切换。
     private func selectSingleTrack(_ selection: Set<ListeningTrack.ID>) {
         guard selection.count == 1,
             let trackID = selection.first,
@@ -146,7 +148,7 @@ struct SidebarView: View {
             return
         }
 
-        player.selectTrack(trackID, autoplay: false)
+        player.selectTrack(trackID, autoplay: player.isPlaying)
     }
 
     private func keepSelectionVisible() {
@@ -231,6 +233,8 @@ private struct TrackRow: View {
                     .font(.body)
                     .foregroundStyle(isCurrentTrack ? theme.color : Color(nsColor: .labelColor))
                     .lineLimit(1)
+                    // 中段截断：同一套题的多个 Section 靠尾部编号区分，保住首尾
+                    .truncationMode(.middle)
 
                 HStack(spacing: 6) {
                     Text(track.duration?.formattedPlaybackTime ?? "--:--")

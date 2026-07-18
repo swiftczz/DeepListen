@@ -3,7 +3,7 @@ import SwiftUI
 struct PlayerDetailView: View {
     @Environment(PlayerStore.self) private var player
     @State private var detailWidth: CGFloat = 0
-    @State private var subtitleDisplayMode: SubtitleDisplayMode = .current
+    @State private var subtitleAreaHeight: CGFloat = 0
     @State private var autoScrollPaused = false
 
     var theme: AppThemeColor
@@ -20,35 +20,46 @@ struct PlayerDetailView: View {
                         PlayerHeaderView(track: track)
                         TransportBarView(theme: theme)
                         ABLoopView(theme: theme)
+                        SubtitleControlsView(theme: theme)
                     }
                     .frame(maxWidth: 1120, alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.horizontal, horizontalPadding)
                     .padding(.top, 28)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, 16)
 
                     ScrollViewReader { scrollProxy in
                         ScrollView {
                             SubtitleView(
-                                displayMode: $subtitleDisplayMode,
+                                availableHeight: subtitleAreaHeight,
                                 theme: theme
                             )
                             .frame(maxWidth: 1120, alignment: .leading)
                             .frame(maxWidth: .infinity, alignment: .center)
                             .padding(.horizontal, horizontalPadding)
-                            .padding(.vertical, 24)
+                            .padding(.top, 8)
+                            .padding(.bottom, 24)
                         }
                         .scrollEdgeEffectStyle(.soft, for: .top)
+                        .onGeometryChange(for: CGFloat.self) { proxy in
+                            proxy.size.height
+                        } action: { _, height in
+                            subtitleAreaHeight = height
+                        }
                         .onScrollPhaseChange { _, newPhase in
                             if newPhase == .interacting {
                                 autoScrollPaused = true
                             }
                         }
+                        .onChange(of: player.selectedTrackID) {
+                            // 换曲目后恢复自动跟随，避免上一曲的手动滚动状态残留
+                            autoScrollPaused = false
+                        }
                         .onChange(of: player.currentSubtitleIndex) {
                             scrollToCurrentSubtitle(using: scrollProxy)
                         }
-                        .onChange(of: subtitleDisplayMode) { _, newMode in
-                            guard newMode == .transcript else { return }
+                        .onChange(of: player.showSubtitleContext) { _, isOn in
+                            guard isOn else { return }
                             autoScrollPaused = false
                             scrollToCurrentSubtitle(using: scrollProxy)
                         }
@@ -76,7 +87,7 @@ struct PlayerDetailView: View {
     @ViewBuilder
     private func resumeAutoScrollButton(using proxy: ScrollViewProxy) -> some View {
         if autoScrollPaused,
-            subtitleDisplayMode == .transcript,
+            player.showSubtitleContext,
             player.showSubtitles,
             player.currentSubtitle != nil
         {
@@ -98,7 +109,7 @@ struct PlayerDetailView: View {
     }
 
     private func scrollToCurrentSubtitle(using proxy: ScrollViewProxy) {
-        guard subtitleDisplayMode == .transcript,
+        guard player.showSubtitleContext,
             !autoScrollPaused,
             let currentSubtitleID = player.currentSubtitle?.id
         else {

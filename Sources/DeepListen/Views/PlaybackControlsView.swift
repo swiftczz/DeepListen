@@ -6,13 +6,10 @@ struct TransportBarView: View {
 
     var theme: AppThemeColor
 
-    private var remainingTime: TimeInterval {
-        max(player.duration - player.currentTime, 0)
-    }
-
-    private var remainingTimeText: String {
-        guard player.duration.isFinite, player.duration >= 1 else { return "--:--" }
-        return "-\(remainingTime.formattedPlaybackTime)"
+    private var timeDisplayText: String {
+        guard player.duration.isFinite, player.duration >= 1 else { return "--:-- / --:--" }
+        let elapsed = min(max(player.currentTime, 0), player.duration)
+        return "\(elapsed.formattedPlaybackTime) / \(player.duration.formattedPlaybackTime)"
     }
 
     /// 倍速按钮面显示值：整数 "1×"、半档 "1.5×"、四分档 "1.25×"。
@@ -33,7 +30,7 @@ struct TransportBarView: View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 14) {
                 timeline
-                remainingTimeLabel
+                timeLabel
                 playbackControls
             }
 
@@ -42,7 +39,7 @@ struct TransportBarView: View {
                     .frame(maxWidth: .infinity)
 
                 HStack(spacing: 14) {
-                    remainingTimeLabel
+                    timeLabel
                     Spacer(minLength: 0)
                     playbackControls
                 }
@@ -62,16 +59,16 @@ struct TransportBarView: View {
         .frame(minWidth: 240)
     }
 
-    private var remainingTimeLabel: some View {
-        Text(remainingTimeText)
+    private var timeLabel: some View {
+        Text(timeDisplayText)
             .monospacedDigit()
             .font(.headline)
             .foregroundStyle(.secondary)
-            .frame(width: 62, alignment: .trailing)
-            .help("剩余时间")
-            .accessibilityLabel("剩余时间")
+            .fixedSize()
+            .help("已播放 / 总时长")
+            .accessibilityLabel("播放进度")
             .accessibilityValue(
-                player.duration >= 1 ? remainingTime.formattedPlaybackTime : "正在载入时长"
+                player.duration >= 1 ? timeDisplayText : "正在载入时长"
             )
     }
 
@@ -159,6 +156,11 @@ private struct ABTimelineSlider: View {
     @State private var width: CGFloat = 0
     @State private var scrubValue: TimeInterval = 0
     @State private var isScrubbing = false
+    @State private var hoverX: CGFloat?
+
+    /// macOS 滑杆滑块中心的活动范围两端各内缩约半个滑块宽，
+    /// 时间↔坐标换算按此补偿，A/B 标记与 hover 预览在两端才不偏。
+    private let sliderThumbInset: CGFloat = 10
 
     private var sliderUpperBound: TimeInterval {
         max(duration, 1)
@@ -185,15 +187,15 @@ private struct ABTimelineSlider: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
+        // .leading 对齐让每个子视图各自垂直居中：滑杆以自然尺寸居中于 46pt 容器，
+        // 轨道中心与同高的播放按钮对齐，无需手算 AppKit 滑杆的内部绘制位置。
+        ZStack(alignment: .leading) {
             Slider(
                 value: sliderValue,
                 in: 0...sliderUpperBound,
                 onEditingChanged: updateScrubbing
             )
             .tint(theme.color)
-            .frame(height: 20)
-            .offset(y: 20)
             .accessibilityLabel("播放进度")
             .accessibilityValue(progressAccessibilityValue)
 
@@ -208,6 +210,10 @@ private struct ABTimelineSlider: View {
             if let loopStart, let loopEnd, loopEnd > loopStart {
                 loopRange(start: loopStart, end: loopEnd)
             }
+
+            if let hoverX, duration >= 1 {
+                hoverTimePreview(atX: hoverX)
+            }
         }
         .frame(height: 46)
         .onGeometryChange(for: CGFloat.self) { proxy in
@@ -215,6 +221,30 @@ private struct ABTimelineSlider: View {
         } action: { _, newWidth in
             width = newWidth
         }
+        .onContinuousHover(coordinateSpace: .local) { phase in
+            switch phase {
+            case .active(let point):
+                hoverX = point.x
+            case .ended:
+                hoverX = nil
+            }
+        }
+    }
+
+    /// 悬停位置的时间气泡，显示在轨道上方；不拦截鼠标事件，拖动滑杆不受影响。
+    private func hoverTimePreview(atX x: CGFloat) -> some View {
+        let halfBubbleWidth: CGFloat = 26
+        return Text(time(atX: x).formattedPlaybackTime)
+            .font(.caption.weight(.medium).monospacedDigit())
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(.regularMaterial, in: Capsule())
+            .offset(
+                x: min(max(x - halfBubbleWidth, 0), max(width - halfBubbleWidth * 2, 0)),
+                y: -18
+            )
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 
     private func updateScrubbing(_ editing: Bool) {
@@ -229,8 +259,18 @@ private struct ABTimelineSlider: View {
     }
 
     private func position(for time: TimeInterval) -> CGFloat {
-        guard duration > 0 else { return 0 }
-        return min(max(CGFloat(time / duration) * width, 0), width)
+        guard duration > 0, width > sliderThumbInset * 2 else { return 0 }
+        let usableWidth = width - sliderThumbInset * 2
+        let fraction = min(max(CGFloat(time / duration), 0), 1)
+        return sliderThumbInset + fraction * usableWidth
+    }
+
+    /// position(for:) 的逆映射：把悬停点 x 坐标换算回时间。
+    private func time(atX x: CGFloat) -> TimeInterval {
+        guard duration > 0, width > sliderThumbInset * 2 else { return 0 }
+        let usableWidth = width - sliderThumbInset * 2
+        let fraction = min(max((x - sliderThumbInset) / usableWidth, 0), 1)
+        return TimeInterval(fraction) * duration
     }
 
     private func marker(label: String, time: TimeInterval) -> some View {
@@ -242,7 +282,8 @@ private struct ABTimelineSlider: View {
                 .fill(theme.color)
                 .frame(width: 3, height: 14)
         }
-        .offset(x: min(max(position(for: time) - 7, 0), max(width - 14, 0)))
+        // y 相对垂直中心：整叠上移，使指示胶囊落在轨道上方
+        .offset(x: min(max(position(for: time) - 7, 0), max(width - 14, 0)), y: -15)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -251,10 +292,11 @@ private struct ABTimelineSlider: View {
         let startX = position(for: start)
         let endX = position(for: end)
 
+        // 垂直居中即与轨道同心，无需 y 偏移
         return Capsule()
             .fill(theme.color.opacity(0.28))
             .frame(width: max(endX - startX, 0), height: 5)
-            .offset(x: startX, y: 30)
+            .offset(x: startX)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }

@@ -29,7 +29,6 @@ import Observation
     }
     private(set) var subtitleCues: [SubtitleCue] = []
     private(set) var currentSubtitleIndex: Int?
-    private(set) var previousSubtitleIndex: Int?
     private(set) var nextSubtitleIndex: Int?
     private(set) var subtitleLoadState: SubtitleLoadState = .idle
     private(set) var isImporting = false
@@ -119,15 +118,6 @@ import Observation
             return nil
         }
         return subtitleCues[currentSubtitleIndex]
-    }
-
-    var previousSubtitle: SubtitleCue? {
-        guard let previousSubtitleIndex,
-            subtitleCues.indices.contains(previousSubtitleIndex)
-        else {
-            return nil
-        }
-        return subtitleCues[previousSubtitleIndex]
     }
 
     var nextSubtitle: SubtitleCue? {
@@ -530,6 +520,8 @@ import Observation
 
     private func loadCurrentTrack(autoplay: Bool) {
         guard let index = selectedTrackIndex else {
+            player.pause()
+            isPlaying = false
             player.replaceCurrentItem(with: nil)
             subtitleCues.removeAll()
             resetSubtitlePosition()
@@ -548,6 +540,9 @@ import Observation
         }
         let selectedTrack = tracks[index]
 
+        // 必须先暂停：replaceCurrentItem 不会停下正在播放的 AVPlayer，
+        // 新曲目会带着原速率直接开播，而 isPlaying 已被置 false，声音与按钮状态脱节。
+        player.pause()
         player.replaceCurrentItem(with: AVPlayerItem(url: selectedTrack.url))
         isPlaying = false
         currentTime = 0
@@ -649,9 +644,6 @@ import Observation
         if currentSubtitleIndex != position.current {
             currentSubtitleIndex = position.current
         }
-        if previousSubtitleIndex != position.previous {
-            previousSubtitleIndex = position.previous
-        }
         if nextSubtitleIndex != position.next {
             nextSubtitleIndex = position.next
         }
@@ -659,7 +651,7 @@ import Observation
 
     private func subtitlePosition(
         at seconds: TimeInterval
-    ) -> (current: Int?, previous: Int?, next: Int?) {
+    ) -> (current: Int?, next: Int?) {
         var lowerBound = subtitleCues.startIndex
         var upperBound = subtitleCues.endIndex
 
@@ -672,28 +664,21 @@ import Observation
             } else if seconds > cue.end {
                 lowerBound = middleIndex + 1
             } else {
-                let previousIndex = middleIndex > subtitleCues.startIndex
-                    ? middleIndex - 1
-                    : nil
                 let nextIndex = subtitleCues.indices.contains(middleIndex + 1)
                     ? middleIndex + 1
                     : nil
-                return (middleIndex, previousIndex, nextIndex)
+                return (middleIndex, nextIndex)
             }
         }
 
-        let previousIndex = lowerBound > subtitleCues.startIndex
-            ? lowerBound - 1
-            : nil
         let nextIndex = subtitleCues.indices.contains(lowerBound)
             ? lowerBound
             : nil
-        return (nil, previousIndex, nextIndex)
+        return (nil, nextIndex)
     }
 
     private func resetSubtitlePosition() {
         currentSubtitleIndex = nil
-        previousSubtitleIndex = nil
         nextSubtitleIndex = nil
     }
 
