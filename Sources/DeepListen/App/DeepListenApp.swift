@@ -45,7 +45,6 @@ private struct PlaybackCommands: Commands {
             Button("播放/暂停") {
                 player.togglePlayPause()
             }
-            .keyboardShortcut(.space, modifiers: [])
             .disabled(!allowsCommands || player.selectedTrack == nil)
 
             Button("上一首") {

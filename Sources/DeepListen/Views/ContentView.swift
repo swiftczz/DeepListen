@@ -9,10 +9,11 @@ struct ContentView: View {
     @State private var showsMediaImporter = false
     @State private var showsThemePopover = false
     @State private var isDropTargeted = false
+    @State private var playbackKeyboardMonitor = PlaybackKeyboardMonitor()
     @FocusState private var isSidebarSearchFocused: Bool
 
-    private let sidebarAutoHideWidth: CGFloat = 820
-    private let sidebarAutoShowWidth: CGFloat = 860
+    private let sidebarAutoHideWidth: CGFloat = 800
+    private let sidebarAutoShowWidth: CGFloat = 830
 
     private var theme: AppThemeColor {
         AppThemeColor(storedValue: storedTheme)
@@ -34,7 +35,7 @@ struct ContentView: View {
             PlayerDetailView(theme: theme)
         }
         .navigationTitle("DeepListen")
-        .frame(minWidth: 800, minHeight: 640)
+        .frame(minWidth: 480, minHeight: 640)
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .tint(theme.color)
         .dropDestination(for: URL.self) { urls, _ in
@@ -55,6 +56,16 @@ struct ContentView: View {
             }
         }
         .animation(.easeOut(duration: 0.12), value: isDropTargeted)
+        .onAppear {
+            playbackKeyboardMonitor.isEnabled = !isSidebarSearchFocused
+            playbackKeyboardMonitor.start(player: player)
+        }
+        .onDisappear {
+            playbackKeyboardMonitor.stop()
+        }
+        .onChange(of: isSidebarSearchFocused) { _, isFocused in
+            playbackKeyboardMonitor.isEnabled = !isFocused
+        }
         .focusedSceneValue(\.playbackCommandsEnabled, !isSidebarSearchFocused)
         .onGeometryChange(for: CGFloat.self) { proxy in
             proxy.size.width

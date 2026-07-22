@@ -128,14 +128,24 @@ struct SubtitleView: View {
 
     /// 单句模式：句间空隙（无当前句）时预览下一句，
     /// 待其开始播放再原地由灰转主题色，不跳版。
+    @ViewBuilder
     private var currentSubtitleView: some View {
-        Text(player.currentSubtitle?.text ?? player.nextSubtitle?.text ?? " ")
-            .font(.title2.weight(.semibold))
-            .fontDesign(.rounded)
-            .foregroundStyle(player.currentSubtitle == nil ? Color.secondary : theme.color)
-            .lineSpacing(8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .textSelection(.enabled)
+        Group {
+            if let cue = player.currentSubtitle {
+                KaraokeSubtitleText(
+                    cue: cue,
+                    themeColor: theme.color
+                )
+            } else {
+                Text(player.nextSubtitle?.text ?? " ")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .font(.title.weight(.semibold))
+        .fontDesign(.rounded)
+        .lineSpacing(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .textSelection(.enabled)
     }
 
     /// 上下文模式：整篇文稿按"当前句样式"铺开——当前句主题色大字，
@@ -171,14 +181,23 @@ private struct LyricsRow: View {
 
     var body: some View {
         Button(action: onTap) {
-            Text(cue.text)
-                .font(isCurrent ? .title2.weight(.semibold) : .title3)
-                .fontDesign(isCurrent ? .rounded : .default)
-                .foregroundStyle(foregroundStyle)
-                .lineSpacing(isCurrent ? 8 : 4)
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
+            Group {
+                if isCurrent {
+                    KaraokeSubtitleText(
+                        cue: cue,
+                        themeColor: theme.color
+                    )
+                } else {
+                    Text(cue.text)
+                        .foregroundStyle(isHovering ? Color.primary : Color.secondary)
+                }
+            }
+            .font(isCurrent ? .title.weight(.semibold) : .title3)
+            .fontDesign(isCurrent ? .rounded : .default)
+            .lineSpacing(isCurrent ? 8 : 4)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
@@ -187,11 +206,78 @@ private struct LyricsRow: View {
         .accessibilityValue(isCurrent ? "当前字幕" : "")
         .accessibilityHint("跳转到这一句")
     }
+}
 
-    private var foregroundStyle: Color {
-        if isCurrent {
-            return theme.color
+/// 普通 SRT 只有整句时间戳。这里将句内时间平均分配给每个单词，
+/// 让已经播放到的内容逐词变为主题色。
+private struct KaraokeSubtitleText: View {
+    @Environment(PlayerStore.self) private var player
+
+    var cue: SubtitleCue
+    var themeColor: Color
+
+    var body: some View {
+        Text(styledText)
+    }
+
+    private var styledText: AttributedString {
+        let tokens = textTokens
+        let wordCount = tokens.lazy.filter { !$0.isWhitespace }.count
+
+        guard wordCount > 0 else {
+            return AttributedString(cue.text)
         }
-        return isHovering ? Color.primary : Color.secondary
+
+        let duration = max(cue.end - cue.start, 0.001)
+        let elapsed = min(max(player.currentTime - cue.start, 0), duration)
+        let progress = elapsed / duration
+        let highlightedWordCount = min(
+            Int(progress * Double(wordCount)) + 1,
+            wordCount
+        )
+
+        var result = AttributedString()
+        var wordIndex = 0
+
+        for token in tokens {
+            var segment = AttributedString(token.text)
+
+            if !token.isWhitespace {
+                segment.foregroundColor =
+                    wordIndex < highlightedWordCount
+                    ? themeColor
+                    : Color.secondary
+                wordIndex += 1
+            }
+
+            result.append(segment)
+        }
+
+        return result
+    }
+
+    /// 保留原字幕中的空格与换行，同时把连续的非空白字符视为一个单词。
+    private var textTokens: [(text: String, isWhitespace: Bool)] {
+        var tokens: [(text: String, isWhitespace: Bool)] = []
+        var currentToken = ""
+        var currentIsWhitespace: Bool?
+
+        for character in cue.text {
+            let isWhitespace = character.isWhitespace
+
+            if let currentIsWhitespace, currentIsWhitespace != isWhitespace {
+                tokens.append((currentToken, currentIsWhitespace))
+                currentToken.removeAll(keepingCapacity: true)
+            }
+
+            currentToken.append(character)
+            currentIsWhitespace = isWhitespace
+        }
+
+        if let currentIsWhitespace, !currentToken.isEmpty {
+            tokens.append((currentToken, currentIsWhitespace))
+        }
+
+        return tokens
     }
 }
