@@ -110,13 +110,6 @@ The app searches for subtitles whenever a track loads, so you can import media f
 
 ### Build and Run
 
-```bash
-git clone https://github.com/swiftczz/DeepListen.git
-cd DeepListen
-swift build
-swift run DeepListen
-```
-
 To create an `.app`, register it with LaunchServices, and launch it, use:
 
 ```bash
@@ -144,24 +137,6 @@ APP_VERSION=0.8.0 ./script/build_and_run.sh --build-only x86_64    --sign --dmg
 - `--sign`: applies an ad hoc signature to the `.app`
 - `--dmg`: writes `DeepListen-<arch>-<version>.dmg` to `dist/`
 - `APP_VERSION`: is written to `Info.plist` and the DMG filename; if unset, the latest Git tag or `0.0.0-dev` is used
-
-## Automated Releases
-
-Pushing a `v*` tag triggers the [Release workflow](.github/workflows/release.yml):
-
-```bash
-git tag -a vX.Y.Z -m "DeepListen vX.Y.Z"
-git push origin vX.Y.Z
-```
-
-The workflow builds universal, arm64, and x86_64 DMGs on a `macos-26` runner, generates release notes, and creates a GitHub Release. A manually dispatched run uploads build artifacts without creating a Release.
-
-## Default Audio Directory
-
-When the library is empty, the app tries to import playable media from:
-
-1. `Resources/DefaultAudio/` inside the app bundle
-2. `备考资料/官方材料/音频/`, searched up to 8 parent directories from the current working directory
 
 ## Tech Stack
 

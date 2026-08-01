@@ -110,13 +110,6 @@ xattr -dr com.apple.quarantine /Applications/DeepListen.app
 
 ### 编译与运行
 
-```bash
-git clone https://github.com/swiftczz/DeepListen.git
-cd DeepListen
-swift build
-swift run DeepListen
-```
-
 若需要生成 `.app`、注册 LaunchServices 并启动应用，可使用项目脚本：
 
 ```bash
@@ -144,24 +137,6 @@ APP_VERSION=0.8.0 ./script/build_and_run.sh --build-only x86_64    --sign --dmg
 - `--sign`：对 `.app` 进行 Ad-hoc 签名
 - `--dmg`：在 `dist/` 生成 `DeepListen-<arch>-<version>.dmg`
 - `APP_VERSION`：写入 `Info.plist` 和 DMG 文件名；未设置时依次使用最新 Git Tag 或 `0.0.0-dev`
-
-## 自动发布
-
-推送 `v*` Tag 会触发 [Release 工作流](.github/workflows/release.yml)：
-
-```bash
-git tag -a vX.Y.Z -m "DeepListen vX.Y.Z"
-git push origin vX.Y.Z
-```
-
-工作流会在 `macos-26` runner 上构建 universal、arm64 和 x86_64 三种 DMG，生成版本变更记录，并创建 GitHub Release。手动运行工作流时，只上传构建产物，不创建 Release。
-
-## 默认音频目录
-
-当媒体库为空时，应用会尝试从以下位置自动导入可播放文件：
-
-1. App 包内的 `Resources/DefaultAudio/`
-2. 从当前工作目录向上最多 8 层查找 `备考资料/官方材料/音频/`
 
 ## 技术栈
 

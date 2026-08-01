@@ -73,10 +73,6 @@ import Observation
         configureNowPlaying()
         loadPersistedLibrary()
 
-        if tracks.isEmpty {
-            addDefaultAudioIfAvailable()
-        }
-
         if selectedTrackID == nil {
             selectedTrackID = tracks.first?.id
         }
@@ -440,11 +436,6 @@ import Observation
         persistLibrary()
     }
 
-    func reloadDefaultLibrary() {
-        clearLibrary()
-        addDefaultAudioIfAvailable()
-    }
-
     func revealInFinder(_ track: ListeningTrack) {
         fileRevealer.revealInFinder(track.url)
     }
@@ -736,22 +727,6 @@ import Observation
         }
     }
 
-    private func addDefaultAudioIfAvailable() {
-        guard
-            let defaultAudioDirectory = Self.defaultAudioDirectories().first(where: {
-                Self.isDirectory($0)
-            })
-        else {
-            return
-        }
-
-        startImport(
-            [defaultAudioDirectory],
-            autoplayFirst: false,
-            announcesResult: false
-        )
-    }
-
     private func refreshDurations(for tracks: [ListeningTrack]) {
         for track in tracks {
             let trackID = track.id
@@ -798,36 +773,6 @@ import Observation
         return tracks.filter { track in
             knownMediaKeys.insert(MediaDiscoveryService.mediaIdentityKey(for: track.url)).inserted
         }
-    }
-
-    private static func isDirectory(_ url: URL) -> Bool {
-        var isDirectory: ObjCBool = false
-        return FileManager.default.fileExists(
-            atPath: url.path(percentEncoded: false),
-            isDirectory: &isDirectory
-        ) && isDirectory.boolValue
-    }
-
-    private static func defaultAudioDirectories() -> [URL] {
-        var candidates: [URL] = []
-
-        if let resourceURL = Bundle.main.resourceURL {
-            candidates.append(resourceURL.appending(path: "DefaultAudio", directoryHint: .isDirectory))
-        }
-
-        var directoryURL = URL(
-            filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
-        for _ in 0..<8 {
-            candidates.append(
-                directoryURL.appending(path: "备考资料/官方材料/音频", directoryHint: .isDirectory))
-            let parentURL = directoryURL.deletingLastPathComponent()
-            if parentURL == directoryURL {
-                break
-            }
-            directoryURL = parentURL
-        }
-
-        return candidates
     }
 
     private static func defaultPlaybackRate() -> Double {
