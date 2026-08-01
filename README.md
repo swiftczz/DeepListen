@@ -2,55 +2,80 @@
 
 **简体中文** | [English](README.en.md)
 
-一款为英语精听训练打造的 macOS 播放器。导入任意带字幕的音频或视频，配合 A/B 循环、倍速、全文稿与上下文显示，专注打磨听力。
+一款专为英语精听训练设计的原生 macOS 播放器。导入本地音频、视频和同名字幕，即可使用逐词高亮、全文稿、倍速播放及 A/B 循环反复练习。
 
-![平台](https://img.shields.io/badge/platform-macOS%2026.0-blue)
-![语言](https://img.shields.io/badge/language-Swift-orange)
-![版本](https://img.shields.io/badge/version-0.1.0-green)
+[![Release](https://img.shields.io/github/v/release/swiftczz/DeepListen?label=release)](https://github.com/swiftczz/DeepListen/releases/latest)
+![Platform](https://img.shields.io/badge/macOS-26.0%2B-blue)
+![Swift](https://img.shields.io/badge/Swift-6.3-orange)
 
-## 功能特性
+## 界面预览
 
-### 音频库
+![DeepListen 主界面](docs/images/deeplisten-main.png)
 
-- 支持拖入文件、文件夹或通过 Finder 打开音视频
-- 自动递归扫描文件夹，按文件名排序
+## 核心功能
+
+### 媒体库
+
+- 拖入文件或文件夹，也可通过工具栏或 Finder 打开音视频
+- 递归扫描文件夹，跳过隐藏文件，并按文件名自然排序
+- 支持拖拽排序、搜索、多选删除及「在访达中显示」
+- 自动去重并持久化媒体库、手动顺序、曲目时长和当前选中项
 - 支持格式：`mp3` `m4a` `aac` `wav` `aiff` `aif` `caf` `flac` `mp4` `m4v` `mov` `avi` `mkv`
-- 媒体库自动持久化，下次打开自动恢复
-- 侧边栏搜索、右键「在访达中显示」、从列表移除
 
-### 字幕
+### 字幕精听
 
-- 自动匹配与媒体**同名**的字幕文件（`.srt` / `.vtt`，大小写不敏感）
-- 兼容 UTF-8 / UTF-16 / ISO-Latin1 编码
-- 自动去除字幕内的 HTML 标签
-- 两种显示模式：
-  - **当前句**：高亮当前播放字幕，可选展示上一句 / 下一句上下文
-  - **全文稿**：完整字幕列表，点击任意一行跳转播放
-- 一键显示 / 隐藏字幕与上下文
+- 自动匹配与媒体文件**同名**的 `.srt` / `.SRT` 或 `.vtt` / `.VTT` 字幕
+- 支持 UTF-8、UTF-16、GB18030 和 ISO-Latin1 编码
+- 自动清理字幕中的 HTML 标签，并按时间重新排序
+- 当前字幕根据播放进度逐词高亮；普通字幕没有逐词时间戳时，会按整句时长估算进度
+- 可在「当前句」与「全文上下文」之间切换，点击任意字幕即可跳转
+- 全文稿自动跟随当前句；手动滚动后可一键恢复自动跟随
 
 ### 播放控制
 
-- 播放 / 暂停、前进 / 后退 5 秒、拖动进度条精确定位
-- 倍速播放：0.25x – 2.0x，步进 0.25x
-- 播放模式：顺序播放 / 单曲循环
+- 播放 / 暂停、前进 / 后退 5 秒，以及进度条精确定位和悬停时间预览
+- 0.25x–2.0x 倍速播放，步进 0.25x
+- 顺序播放与单曲循环，自动保存倍速和播放模式
+- 支持 macOS 系统媒体控制、上一首 / 下一首和 5 秒快进 / 快退
 
 ### A/B 片段练习
 
-- 设置 A 点、B 点，在时间轴上标记并高亮循环区间
-- 区间结束时自动回到 A 点循环
-- 一键清除片段
+- 在当前位置设置 A 点和 B 点
+- 时间轴显示片段标记及高亮区间
+- 播放到 B 点后自动跳回 A 点，也可随时清除片段
 
-### 外观
+### 原生界面
 
 - 9 种主题色：系统、蓝、紫、粉、红、橙、黄、绿、石墨
-- 主题色持久保存
-- 自适应窄窗口布局，侧边栏自动收起
+- 主题色和字幕显示偏好自动保存
+- 自适应窄窗口布局，空间不足时自动收起侧边栏
+- 针对 VoiceOver、键盘导航和 macOS Liquid Glass 进行适配
+
+## 安装
+
+1. 前往 [Releases](https://github.com/swiftczz/DeepListen/releases/latest) 下载对应架构或 universal 版本的 DMG。
+2. 打开 DMG，将 `DeepListen.app` 拖入「应用程序」。
+3. 首次启动时右键应用并选择「打开」。
+
+发布包使用 Ad-hoc 签名。如果 Gatekeeper 仍然阻止启动，可在终端执行：
+
+```bash
+xattr -dr com.apple.quarantine /Applications/DeepListen.app
+```
+
+## 快速开始
+
+1. 点击工具栏中的 `+`，或将媒体文件 / 文件夹拖入窗口。
+2. 如需字幕，把字幕与媒体放在同一目录并使用相同的主文件名。
+3. 选择曲目后开始播放，通过字幕、倍速和 A/B 循环进行精听。
 
 ## 快捷键
 
 | 快捷键 | 功能 |
 | --- | --- |
 | `Space` | 播放 / 暂停 |
+| `←` | 后退 5 秒 |
+| `→` | 前进 5 秒 |
 | `⌘⇧←` | 上一首 |
 | `⌘⇧→` | 下一首 |
 | `⌘⌥←` | 后退 5 秒 |
@@ -60,11 +85,13 @@
 | `⌘⌥Esc` | 清除 A/B 片段 |
 | `⌘⌥S` | 显示 / 隐藏字幕 |
 
+在搜索框或其他文本输入区域编辑时，无修饰键的播放快捷键不会触发。
+
 ## 字幕匹配规则
 
-把字幕文件与音视频文件放在同一目录，并使用**相同的主文件名**，应用会自动加载：
+字幕文件必须与媒体文件位于同一目录，并使用相同的主文件名：
 
-```
+```text
 我的素材/
 ├── Lesson 01.mp3
 ├── Lesson 01.srt      ← 自动匹配
@@ -72,98 +99,100 @@
 └── Lesson 02.vtt      ← 自动匹配
 ```
 
+应用会在每次载入曲目时重新查找字幕，因此可以先导入媒体，再补充字幕文件。
+
 ## 从源码构建
 
 ### 环境要求
 
-- macOS 26.0 及以上
+- macOS 26.0 或更高版本
 - Swift 6.3 工具链
 
-### 构建并运行
+### 编译与运行
 
 ```bash
-./script/build_and_run.sh            # 构建并启动
-./script/build_and_run.sh --debug    # 构建并在 lldb 中调试
-./script/build_and_run.sh --logs     # 启动并跟踪进程日志
-./script/build_and_run.sh --telemetry# 启动并跟踪 subsystem 日志
-./script/build_and_run.sh --verify   # 启动并验证进程存活
-```
-
-脚本会执行 `swift build`，把产物打包成 `dist/DeepListen.app`，并注册到 LaunchServices，之后可直接通过 Finder 双击音视频文件用 DeepListen 打开。
-
-如需仅编译不打包：
-
-```bash
+git clone https://github.com/swiftczz/DeepListen.git
+cd DeepListen
 swift build
+swift run DeepListen
 ```
 
-### 打包 DMG（Ad-hoc 签名）
-
-`build_and_run.sh` 还支持纯构建模式，产出 Ad-hoc 签名的 `DeepListen.app` 和 DMG，供 CI 或本地出包：
+若需要生成 `.app`、注册 LaunchServices 并启动应用，可使用项目脚本：
 
 ```bash
-APP_VERSION=0.1.0 ./script/build_and_run.sh --build-only universal --sign --dmg
-APP_VERSION=0.1.0 ./script/build_and_run.sh --build-only arm64     --sign --dmg
-APP_VERSION=0.1.0 ./script/build_and_run.sh --build-only x86_64    --sign --dmg
+./script/build_and_run.sh
 ```
 
-- `--build-only <arch>`：`universal` / `arm64` / `x86_64`，release 配置
-- `--sign`：Ad-hoc 签名（`codesign -s -`）
-- `--dmg`：在 `dist/` 产出 `DeepListen-<arch>-<version>.dmg`
-- `APP_VERSION`：写入 `Info.plist` 与 DMG 文件名，默认 `0.1.0`
+其他开发模式：
 
-> ⚠️ Ad-hoc 签名的 app 首次打开会被 macOS Gatekeeper 拦截。放行方式：右键 app →「打开」，或终端执行 `xattr -dr com.apple.quarantine /Applications/DeepListen.app`。
+| 命令 | 用途 |
+| --- | --- |
+| `./script/build_and_run.sh --debug` | 构建并在 LLDB 中调试 |
+| `./script/build_and_run.sh --logs` | 启动并跟踪进程日志 |
+| `./script/build_and_run.sh --telemetry` | 启动并跟踪应用 subsystem 日志 |
+| `./script/build_and_run.sh --verify` | 启动并验证进程是否存活 |
+
+### 打包 DMG
+
+```bash
+APP_VERSION=0.8.0 ./script/build_and_run.sh --build-only universal --sign --dmg
+APP_VERSION=0.8.0 ./script/build_and_run.sh --build-only arm64     --sign --dmg
+APP_VERSION=0.8.0 ./script/build_and_run.sh --build-only x86_64    --sign --dmg
+```
+
+- `--build-only <arch>`：使用 release 配置构建 `universal`、`arm64` 或 `x86_64`
+- `--sign`：对 `.app` 进行 Ad-hoc 签名
+- `--dmg`：在 `dist/` 生成 `DeepListen-<arch>-<version>.dmg`
+- `APP_VERSION`：写入 `Info.plist` 和 DMG 文件名；未设置时依次使用最新 Git Tag 或 `0.0.0-dev`
 
 ## 自动发布
 
-推送到 GitHub 的 `v*` tag 会触发 [GitHub Actions](.github/workflows/release.yml) 自动构建并发布：
+推送 `v*` Tag 会触发 [Release 工作流](.github/workflows/release.yml)：
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag -a vX.Y.Z -m "DeepListen vX.Y.Z"
+git push origin vX.Y.Z
 ```
 
-workflow 会在 `macos-26` runner 上构建三个架构的 DMG（universal / arm64 / x86_64），Ad-hoc 签名，创建 GitHub Release 并附挂这三个 DMG，版本号取自 tag。
-
-也可在仓库的 **Actions → Release → Run workflow** 手动触发进行验证，此时 DMG 作为 workflow artifact 下载，不发 Release。
+工作流会在 `macos-26` runner 上构建 universal、arm64 和 x86_64 三种 DMG，生成版本变更记录，并创建 GitHub Release。手动运行工作流时，只上传构建产物，不创建 Release。
 
 ## 默认音频目录
 
-应用启动时若媒体库为空，会尝试自动加载默认音频：
+当媒体库为空时，应用会尝试从以下位置自动导入可播放文件：
 
-1. App 包内 `Resources/DefaultAudio/`
-2. 从工作目录起向上最多 8 层查找 `备考资料/官方材料/音频/`
-
-找到后会自动导入其中可播放的媒体文件。
+1. App 包内的 `Resources/DefaultAudio/`
+2. 从当前工作目录向上最多 8 层查找 `备考资料/官方材料/音频/`
 
 ## 技术栈
 
-- **SwiftUI** —— 整个 UI 层
-- **AVFoundation** —— 音视频播放
-- **Observation** —— `@Observable` 状态管理
-- **Swift Package Manager** —— 依赖与构建
+- **SwiftUI**：界面与交互
+- **AVFoundation**：媒体播放与时长解析
+- **MediaPlayer**：系统媒体控制与正在播放信息
+- **Observation**：`@Observable` 状态管理
+- **Swift Package Manager**：构建与依赖管理
 
 ## 项目结构
 
-```
+```text
 DeepListen/
-├── Package.swift
-├── .github/
-│   └── workflows/
-│       └── release.yml     # tag 触发自动构建 DMG 并发 Release
+├── .github/workflows/
+│   └── release.yml          # Tag 触发的 DMG 发布流程
+├── docs/images/             # README 图片资源
 ├── Resources/
 │   └── AppIcon.icns
 ├── script/
-│   └── build_and_run.sh    # 本地运行 / CI 打包 DMG
-└── Sources/DeepListen/
-    ├── App/            # @main 入口与菜单命令
-    ├── Models/         # 音轨、字幕、播放模式、主题色
-    ├── Stores/         # PlayerStore 播放状态
-    ├── Services/       # Finder 定位等系统能力
-    ├── Support/        # 字幕解析、时间格式化
-    └── Views/          # SwiftUI 视图
+│   ├── build_and_run.sh     # 本地运行与打包
+│   └── generate_changelog.sh
+├── Sources/DeepListen/
+│   ├── App/                 # 应用入口与菜单命令
+│   ├── Models/              # 音轨、字幕、播放模式与主题
+│   ├── Services/            # 媒体发现、Finder 与系统媒体能力
+│   ├── Stores/              # 播放状态与媒体库
+│   ├── Support/             # 字幕解析与时间格式化
+│   └── Views/               # SwiftUI 视图
+└── Package.swift
 ```
 
 ## 许可证
 
-个人学习用途，暂未指定开源许可证。
+本项目目前用于个人学习，尚未指定开源许可证。

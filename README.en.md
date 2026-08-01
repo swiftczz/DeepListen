@@ -2,75 +2,104 @@
 
 [简体中文](README.md) | **English**
 
-A macOS player built for focused English listening practice. Import any subtitled audio or video and drill your listening with A/B looping, speed control, full transcripts, and context display.
+A native macOS player designed for focused English listening practice. Import local audio, video, and matching subtitles, then study with word-by-word highlighting, full transcripts, speed control, and A/B looping.
 
-![Platform](https://img.shields.io/badge/platform-macOS%2026.0-blue)
-![Language](https://img.shields.io/badge/language-Swift-orange)
-![Version](https://img.shields.io/badge/version-0.1.0-green)
+[![Release](https://img.shields.io/github/v/release/swiftczz/DeepListen?label=release)](https://github.com/swiftczz/DeepListen/releases/latest)
+![Platform](https://img.shields.io/badge/macOS-26.0%2B-blue)
+![Swift](https://img.shields.io/badge/Swift-6.3-orange)
 
-## Features
+## Preview
 
-### Library
+![DeepListen main window](docs/images/deeplisten-main.png)
 
-- Drop in files or folders, or open audio/video from Finder
-- Recursive folder scanning, sorted by filename
+## Highlights
+
+### Media Library
+
+- Drop in files or folders, or open audio and video from the toolbar or Finder
+- Recursively scans folders, skips hidden files, and sorts results naturally by filename
+- Supports drag-to-reorder, search, multi-selection removal, and Reveal in Finder
+- Deduplicates media and persists the library, manual order, durations, and selected track
 - Supported formats: `mp3` `m4a` `aac` `wav` `aiff` `aif` `caf` `flac` `mp4` `m4v` `mov` `avi` `mkv`
-- Library is persisted and restored automatically on next launch
-- Sidebar search, right-click "Reveal in Finder", remove from list
 
-### Subtitles
+### Subtitle Practice
 
-- Auto-matches subtitle files with the **same name** as the media (`.srt` / `.vtt`, case-insensitive)
-- Handles UTF-8 / UTF-16 / ISO-Latin1 encodings
-- Strips HTML tags from subtitle text
-- Two display modes:
-  - **Current**: highlights the active cue, with optional previous / next context
-  - **Transcript**: full subtitle list — click any line to jump
-- One-toggle show / hide subtitles and context
+- Automatically matches `.srt` / `.SRT` or `.vtt` / `.VTT` subtitles with the **same base filename** as the media
+- Supports UTF-8, UTF-16, GB18030, and ISO-Latin1 encodings
+- Removes HTML tags and sorts cues by timestamp
+- Highlights the current cue word by word; when a subtitle has only cue-level timing, progress is estimated across the cue duration
+- Switches between a focused current-cue view and full transcript context; click any cue to jump to it
+- Automatically follows the active cue, with one-click resume after manual scrolling
 
 ### Playback
 
-- Play / pause, skip ±5 seconds, precise scrubbing
-- Speed control: 0.25x – 2.0x in 0.25x steps
-- Playback modes: sequence / single loop
+- Play or pause, skip backward or forward 5 seconds, scrub precisely, and preview time on timeline hover
+- Speed control from 0.25x to 2.0x in 0.25x steps
+- Sequence and single-track repeat modes, with saved speed and playback-mode preferences
+- Supports macOS media controls, previous or next track, and 5-second skip commands
 
 ### A/B Loop Practice
 
-- Set A and B points, marked and highlighted on the timeline
-- Auto-loops back to A when the segment ends
-- One-tap clear
+- Set A and B at the current playback position
+- See markers and the highlighted loop range on the timeline
+- Automatically return to A at the end of the segment, or clear the loop at any time
 
-### Appearance
+### Native Interface
 
-- 9 theme colors: system, blue, purple, pink, red, orange, yellow, green, graphite
-- Theme persists across launches
-- Adaptive layout for narrow windows with auto-collapsing sidebar
+- 9 theme colors: system, blue, purple, pink, red, orange, yellow, green, and graphite
+- Persists theme and subtitle display preferences
+- Adapts to narrow windows and automatically collapses the sidebar when space is limited
+- Designed for VoiceOver, keyboard navigation, and macOS Liquid Glass
+
+## Install
+
+1. Download the DMG for your architecture, or the universal build, from [Releases](https://github.com/swiftczz/DeepListen/releases/latest).
+2. Open the DMG and drag `DeepListen.app` into Applications.
+3. On first launch, right-click the app and choose **Open**.
+
+Release builds use ad hoc signing. If Gatekeeper still blocks the app, run:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/DeepListen.app
+```
+
+## Quick Start
+
+1. Click `+` in the toolbar, or drop media files or folders into the window.
+2. For subtitles, place the subtitle beside the media and give it the same base filename.
+3. Select a track and practice with subtitles, speed control, and A/B looping.
 
 ## Keyboard Shortcuts
 
 | Shortcut | Action |
 | --- | --- |
 | `Space` | Play / Pause |
+| `←` | Rewind 5 seconds |
+| `→` | Forward 5 seconds |
 | `⌘⇧←` | Previous track |
 | `⌘⇧→` | Next track |
-| `⌘⌥←` | Rewind 5s |
-| `⌘⌥→` | Forward 5s |
+| `⌘⌥←` | Rewind 5 seconds |
+| `⌘⌥→` | Forward 5 seconds |
 | `⌘⌥A` | Set A point |
 | `⌘⌥B` | Set B point |
 | `⌘⌥Esc` | Clear A/B segment |
-| `⌘⌥S` | Toggle subtitles |
+| `⌘⌥S` | Show / hide subtitles |
+
+Unmodified playback shortcuts are disabled while editing the search field or another text input.
 
 ## Subtitle Matching
 
-Place subtitle files in the same directory as the media, using the **same base filename** — the app loads them automatically:
+Subtitle files must be in the same directory as their media and use the same base filename:
 
-```
+```text
 My Material/
 ├── Lesson 01.mp3
 ├── Lesson 01.srt      ← auto-matched
 ├── Lesson 02.mp4
 └── Lesson 02.vtt      ← auto-matched
 ```
+
+The app searches for subtitles whenever a track loads, so you can import media first and add its subtitle later.
 
 ## Build from Source
 
@@ -79,91 +108,91 @@ My Material/
 - macOS 26.0 or later
 - Swift 6.3 toolchain
 
-### Build & Run
+### Build and Run
 
 ```bash
-./script/build_and_run.sh            # build and launch
-./script/build_and_run.sh --debug    # build and debug in lldb
-./script/build_and_run.sh --logs     # launch and stream process logs
-./script/build_and_run.sh --telemetry# launch and stream subsystem logs
-./script/build_and_run.sh --verify   # launch and verify the process is alive
-```
-
-The script runs `swift build`, packages the output into `dist/DeepListen.app`, and registers it with LaunchServices so you can double-click audio/video files in Finder to open them in DeepListen.
-
-To compile without packaging:
-
-```bash
+git clone https://github.com/swiftczz/DeepListen.git
+cd DeepListen
 swift build
+swift run DeepListen
 ```
 
-### Building a DMG (Ad-hoc signed)
-
-`build_and_run.sh` also supports a build-only mode that produces an Ad-hoc signed `DeepListen.app` and DMG, for CI or local packaging:
+To create an `.app`, register it with LaunchServices, and launch it, use:
 
 ```bash
-APP_VERSION=0.1.0 ./script/build_and_run.sh --build-only universal --sign --dmg
-APP_VERSION=0.1.0 ./script/build_and_run.sh --build-only arm64     --sign --dmg
-APP_VERSION=0.1.0 ./script/build_and_run.sh --build-only x86_64    --sign --dmg
+./script/build_and_run.sh
 ```
 
-- `--build-only <arch>`: `universal` / `arm64` / `x86_64`, release configuration
-- `--sign`: Ad-hoc signing (`codesign -s -`)
-- `--dmg`: produces `DeepListen-<arch>-<version>.dmg` in `dist/`
-- `APP_VERSION`: written into `Info.plist` and the DMG filename, defaults to `0.1.0`
+Additional development modes:
 
-> ⚠️ Ad-hoc signed apps are blocked by macOS Gatekeeper on first open. To bypass: right-click the app → "Open", or run `xattr -dr com.apple.quarantine /Applications/DeepListen.app` in Terminal.
+| Command | Purpose |
+| --- | --- |
+| `./script/build_and_run.sh --debug` | Build and debug with LLDB |
+| `./script/build_and_run.sh --logs` | Launch and stream process logs |
+| `./script/build_and_run.sh --telemetry` | Launch and stream app subsystem logs |
+| `./script/build_and_run.sh --verify` | Launch and verify that the process stays alive |
 
-## Automated Release
-
-Pushing a `v*` tag to GitHub triggers [GitHub Actions](.github/workflows/release.yml) to build and publish automatically:
+### Build a DMG
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+APP_VERSION=0.8.0 ./script/build_and_run.sh --build-only universal --sign --dmg
+APP_VERSION=0.8.0 ./script/build_and_run.sh --build-only arm64     --sign --dmg
+APP_VERSION=0.8.0 ./script/build_and_run.sh --build-only x86_64    --sign --dmg
 ```
 
-The workflow builds three architecture DMGs (universal / arm64 / x86_64) on a `macos-26` runner, Ad-hoc signs them, creates a GitHub Release, and attaches the DMGs. The version is derived from the tag.
+- `--build-only <arch>`: builds `universal`, `arm64`, or `x86_64` in release configuration
+- `--sign`: applies an ad hoc signature to the `.app`
+- `--dmg`: writes `DeepListen-<arch>-<version>.dmg` to `dist/`
+- `APP_VERSION`: is written to `Info.plist` and the DMG filename; if unset, the latest Git tag or `0.0.0-dev` is used
 
-You can also trigger it manually from **Actions → Release → Run workflow** for verification; in that case the DMGs are uploaded as workflow artifacts instead of creating a Release.
+## Automated Releases
+
+Pushing a `v*` tag triggers the [Release workflow](.github/workflows/release.yml):
+
+```bash
+git tag -a vX.Y.Z -m "DeepListen vX.Y.Z"
+git push origin vX.Y.Z
+```
+
+The workflow builds universal, arm64, and x86_64 DMGs on a `macos-26` runner, generates release notes, and creates a GitHub Release. A manually dispatched run uploads build artifacts without creating a Release.
 
 ## Default Audio Directory
 
-On launch, if the library is empty the app tries to auto-load default audio from:
+When the library is empty, the app tries to import playable media from:
 
 1. `Resources/DefaultAudio/` inside the app bundle
-2. `备考资料/官方材料/音频/` searched up to 8 parent directories from the working directory
-
-If found, playable media inside is imported automatically.
+2. `备考资料/官方材料/音频/`, searched up to 8 parent directories from the current working directory
 
 ## Tech Stack
 
-- **SwiftUI** — entire UI layer
-- **AVFoundation** — audio/video playback
-- **Observation** — `@Observable` state management
-- **Swift Package Manager** — dependencies and build
+- **SwiftUI**: interface and interaction
+- **AVFoundation**: media playback and duration loading
+- **MediaPlayer**: system media controls and Now Playing information
+- **Observation**: `@Observable` state management
+- **Swift Package Manager**: builds and dependency management
 
 ## Project Structure
 
-```
+```text
 DeepListen/
-├── Package.swift
-├── .github/
-│   └── workflows/
-│       └── release.yml     # tag-triggered DMG build + Release
+├── .github/workflows/
+│   └── release.yml          # tag-triggered DMG release workflow
+├── docs/images/             # README image assets
 ├── Resources/
 │   └── AppIcon.icns
 ├── script/
-│   └── build_and_run.sh    # local run / CI DMG packaging
-└── Sources/DeepListen/
-    ├── App/            # @main entry and menu commands
-    ├── Models/         # track, subtitle, playback mode, theme color
-    ├── Stores/         # PlayerStore playback state
-    ├── Services/       # system capabilities like Finder reveal
-    ├── Support/        # subtitle parsing, time formatting
-    └── Views/          # SwiftUI views
+│   ├── build_and_run.sh     # local run and packaging
+│   └── generate_changelog.sh
+├── Sources/DeepListen/
+│   ├── App/                 # app entry point and menu commands
+│   ├── Models/              # tracks, subtitles, playback mode, and theme
+│   ├── Services/            # media discovery, Finder, and system media integration
+│   ├── Stores/              # playback state and media library
+│   ├── Support/             # subtitle parsing and time formatting
+│   └── Views/               # SwiftUI views
+└── Package.swift
 ```
 
 ## License
 
-For personal study use; no open-source license specified yet.
+This project is currently intended for personal study and does not specify an open-source license.
