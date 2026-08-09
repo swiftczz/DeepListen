@@ -24,6 +24,7 @@ struct DeepListenApp: App {
                 }
         }
         .defaultSize(width: 1180, height: 760)
+        .windowResizability(.contentSize)
         .windowToolbarStyle(.unified)
         .commands {
             PlaybackCommands(player: player)
