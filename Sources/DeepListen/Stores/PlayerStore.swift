@@ -1,4 +1,3 @@
-import AVFoundation
 import Foundation
 import Observation
 
@@ -9,39 +8,34 @@ import Observation
     private(set) var isPlaying = false
     var currentTime: TimeInterval = 0
     var duration: TimeInterval = 0
-    private(set) var playbackRate: Double = PlayerStore.defaultPlaybackRate()
-    var playbackMode: PlaybackMode = PlayerStore.defaultPlaybackMode() {
+    private(set) var playbackRate: Double
+    var playbackMode: PlaybackMode {
         didSet {
-            UserDefaults.standard.set(playbackMode.rawValue, forKey: Keys.playbackMode)
+            persistence.savePlaybackMode(playbackMode)
         }
     }
-    var showSubtitles: Bool = PlayerStore.defaultBool(Keys.showSubtitles, fallback: true) {
+    var showSubtitles: Bool {
         didSet {
-            UserDefaults.standard.set(showSubtitles, forKey: Keys.showSubtitles)
+            persistence.saveShowSubtitles(showSubtitles)
         }
     }
-    var showSubtitleContext: Bool = PlayerStore.defaultBool(
-        Keys.showSubtitleContext, fallback: true)
-    {
+    var showSubtitleContext: Bool {
         didSet {
-            UserDefaults.standard.set(showSubtitleContext, forKey: Keys.showSubtitleContext)
+            persistence.saveShowSubtitleContext(showSubtitleContext)
         }
     }
-    private(set) var subtitleCues: [SubtitleCue] = []
-    private(set) var currentSubtitleIndex: Int?
-    private(set) var nextSubtitleIndex: Int?
-    private(set) var subtitleLoadState: SubtitleLoadState = .idle
     private(set) var isImporting = false
     var libraryNotice: LibraryNotice?
     var loopStart: TimeInterval?
     var loopEnd: TimeInterval?
+    private(set) var isSubtitleLooping = false
 
-    @ObservationIgnored private let player = AVPlayer()
+    @ObservationIgnored private let playbackEngine = PlaybackEngine()
+    @ObservationIgnored private let subtitleSession = SubtitleSession()
+    @ObservationIgnored private let persistence: PlayerPersistence
     @ObservationIgnored private let fileRevealer: FileRevealing
     @ObservationIgnored private let nowPlayingController = NowPlayingController()
 
-    @ObservationIgnored private var timeObserver: Any?
-    @ObservationIgnored private var playbackFinishedTask: Task<Void, Never>?
     @ObservationIgnored private var libraryNoticeTask: Task<Void, Never>?
     @ObservationIgnored private var subtitleLoadTask: Task<Void, Never>?
     @ObservationIgnored private var importTask: Task<Void, Never>?
@@ -49,27 +43,16 @@ import Observation
 
     static let importableContentTypes = MediaDiscoveryService.importableContentTypes
 
-    private enum Keys {
-        static let storedTracks = "libraryTracks"
-        static let selectedTrackID = "selectedTrackID"
-        static let playbackRate = "playbackRate"
-        static let playbackMode = "playbackMode"
-        static let showSubtitles = "showSubtitles"
-        static let showSubtitleContext = "showSubtitleContext"
-    }
-
-    private struct StoredTrack: Codable {
-        var id: UUID
-        var path: String
-        /// 缓存时长，避免每次启动都重新解析整库媒体文件。
-        /// 可选类型 + decodeIfPresent，兼容没有该字段的旧数据。
-        var duration: TimeInterval?
-    }
-
     init(fileRevealer: FileRevealing = MacFileRevealer()) {
+        let persistence = PlayerPersistence()
+        self.persistence = persistence
         self.fileRevealer = fileRevealer
+        playbackRate = persistence.playbackRate
+        playbackMode = persistence.playbackMode
+        showSubtitles = persistence.showSubtitles
+        showSubtitleContext = persistence.showSubtitleContext
 
-        configurePlayer()
+        configurePlaybackEngine()
         configureNowPlaying()
         loadPersistedLibrary()
 
@@ -83,16 +66,11 @@ import Observation
     }
 
     isolated deinit {
-        playbackFinishedTask?.cancel()
         libraryNoticeTask?.cancel()
         subtitleLoadTask?.cancel()
         importTask?.cancel()
         durationLoadTasks.values.forEach { $0.cancel() }
         nowPlayingController.teardown()
-
-        if let timeObserver {
-            player.removeTimeObserver(timeObserver)
-        }
     }
 
     var selectedTrack: ListeningTrack? {
@@ -109,18 +87,30 @@ import Observation
         return tracks.firstIndex { $0.id == selectedTrackID }
     }
 
+    var subtitleCues: [SubtitleCue] {
+        subtitleSession.cues
+    }
+
+    var subtitleLoadState: SubtitleLoadState {
+        subtitleSession.loadState
+    }
+
+    var currentSubtitleIndex: Int? {
+        subtitleSession.currentIndex
+    }
+
     var currentSubtitle: SubtitleCue? {
-        guard let currentSubtitleIndex, subtitleCues.indices.contains(currentSubtitleIndex) else {
-            return nil
-        }
-        return subtitleCues[currentSubtitleIndex]
+        subtitleSession.currentCue
+    }
+
+    /// 字幕之间存在空档时继续沿用上一句，直到下一句真正开始。
+    /// 第一条字幕开始前没有上一句，因此仍返回 nil。
+    var subtitleForSentenceLoop: SubtitleCue? {
+        subtitleSession.sentenceLoopCue
     }
 
     var nextSubtitle: SubtitleCue? {
-        guard let nextSubtitleIndex, subtitleCues.indices.contains(nextSubtitleIndex) else {
-            return nil
-        }
-        return subtitleCues[nextSubtitleIndex]
+        subtitleSession.nextCue
     }
 
     var loopSummary: String {
@@ -273,26 +263,26 @@ import Observation
     }
 
     func play() {
-        if player.currentItem == nil {
+        if !playbackEngine.hasCurrentItem {
             if selectedTrackID == nil {
                 selectedTrackID = tracks.first?.id
             }
             loadCurrentTrack(autoplay: false)
         }
 
-        guard player.currentItem != nil else { return }
+        guard playbackEngine.hasCurrentItem else { return }
 
         if duration > 0, currentTime >= duration {
             seek(to: 0)
         }
 
         isPlaying = true
-        player.playImmediately(atRate: Float(playbackRate))
+        playbackEngine.play(rate: playbackRate)
         updateNowPlaying()
     }
 
     func pause() {
-        player.pause()
+        playbackEngine.pause()
         isPlaying = false
         updateNowPlaying()
     }
@@ -319,42 +309,57 @@ import Observation
             ? min(max(seconds, 0), duration)
             : max(seconds, 0)
         currentTime = clampedSeconds
-        updateSubtitleIndex(at: clampedSeconds)
-        player.seek(
-            to: CMTime(seconds: clampedSeconds, preferredTimescale: 600),
-            toleranceBefore: .zero,
-            toleranceAfter: .zero
-        )
+        subtitleSession.updatePosition(at: clampedSeconds)
+        playbackEngine.seek(to: clampedSeconds)
         updateNowPlaying()
     }
 
     func skip(by seconds: TimeInterval) {
         seek(to: currentTime + seconds)
         if isPlaying {
-            player.playImmediately(atRate: Float(playbackRate))
+            playbackEngine.play(rate: playbackRate)
         }
     }
 
     func jumpToSubtitle(_ cue: SubtitleCue) {
+        if isSubtitleLooping {
+            setSubtitleLoopRange(cue)
+        }
+
         seek(to: cue.start)
         if isPlaying {
-            player.playImmediately(atRate: Float(playbackRate))
+            playbackEngine.play(rate: playbackRate)
         }
+    }
+
+    /// 使用当前字幕的起止时间设置 A/B 循环。开启后点击其他字幕句时，
+    /// `jumpToSubtitle(_:)` 会让循环范围跟随新句子。
+    func setSubtitleLooping(_ enabled: Bool) {
+        guard enabled else {
+            clearLoop()
+            return
+        }
+        guard let currentSubtitle = subtitleForSentenceLoop else { return }
+
+        isSubtitleLooping = true
+        setSubtitleLoopRange(currentSubtitle)
+        jumpToSubtitle(currentSubtitle)
     }
 
     func setPlaybackRate(_ rate: Double) {
         let stepped = (rate / 0.25).rounded() * 0.25
         let clamped = min(2.0, max(0.25, stepped))
         playbackRate = clamped
-        UserDefaults.standard.set(clamped, forKey: Keys.playbackRate)
+        persistence.savePlaybackRate(clamped)
 
         if isPlaying {
-            player.rate = Float(clamped)
+            playbackEngine.setRate(clamped)
         }
         updateNowPlaying()
     }
 
     func setLoopStart() {
+        isSubtitleLooping = false
         loopStart = currentTime
         if let loopEnd, loopEnd <= currentTime {
             self.loopEnd = nil
@@ -363,6 +368,7 @@ import Observation
 
     func setLoopEnd() {
         guard let loopStart else { return }
+        isSubtitleLooping = false
 
         if currentTime > loopStart {
             loopEnd = currentTime
@@ -372,6 +378,12 @@ import Observation
     func clearLoop() {
         loopStart = nil
         loopEnd = nil
+        isSubtitleLooping = false
+    }
+
+    private func setSubtitleLoopRange(_ cue: SubtitleCue) {
+        loopStart = cue.start
+        loopEnd = cue.end
     }
 
     /// 拖拽排序：移动曲目并持久化手动顺序。仅在未过滤（完整列表）时调用。
@@ -388,7 +400,7 @@ import Observation
 
         if removedSelectedTrack {
             pause()
-            player.replaceCurrentItem(with: nil)
+            playbackEngine.replaceCurrentItem(with: nil)
             selectedTrackID = tracks.indices.contains(index) ? tracks[index].id : tracks.first?.id
             loadCurrentTrack(autoplay: false)
         }
@@ -407,7 +419,7 @@ import Observation
 
         if removedSelectedTrack {
             pause()
-            player.replaceCurrentItem(with: nil)
+            playbackEngine.replaceCurrentItem(with: nil)
             selectedTrackID = tracks.first?.id
             loadCurrentTrack(autoplay: false)
         }
@@ -423,16 +435,13 @@ import Observation
         subtitleLoadTask = nil
         cancelDurationLoads(for: tracks.map(\.id))
         pause()
-        player.replaceCurrentItem(with: nil)
+        playbackEngine.replaceCurrentItem(with: nil)
         tracks.removeAll()
         selectedTrackID = nil
-        subtitleCues.removeAll()
-        resetSubtitlePosition()
-        subtitleLoadState = .idle
+        subtitleSession.reset()
         currentTime = 0
         duration = 0
-        loopStart = nil
-        loopEnd = nil
+        clearLoop()
         persistLibrary()
     }
 
@@ -444,26 +453,13 @@ import Observation
         MediaDiscoveryService.isPlayableMediaURL(url)
     }
 
-    private func configurePlayer() {
-        player.automaticallyWaitsToMinimizeStalling = false
-
-        timeObserver = player.addPeriodicTimeObserver(
-            forInterval: CMTime(seconds: 0.08, preferredTimescale: 600),
-            queue: .main
-        ) { [weak self] time in
-            Task { @MainActor in
-                self?.handlePlaybackTick(time.seconds)
-            }
-        }
-
-        playbackFinishedTask = Task { [weak self] in
-            for await notification in NotificationCenter.default.notifications(
-                named: .AVPlayerItemDidPlayToEndTime)
-            {
-                guard let self else { return }
-                handlePlaybackFinished(notification)
-            }
-        }
+    private func configurePlaybackEngine() {
+        playbackEngine.configure(
+            handlers: PlaybackEngine.Handlers(
+                tick: { [weak self] seconds in self?.handlePlaybackTick(seconds) },
+                finished: { [weak self] in self?.handlePlaybackFinished() }
+            )
+        )
     }
 
     private func configureNowPlaying() {
@@ -511,14 +507,13 @@ import Observation
 
     private func loadCurrentTrack(autoplay: Bool) {
         guard let index = selectedTrackIndex else {
-            player.pause()
+            playbackEngine.pause()
             isPlaying = false
-            player.replaceCurrentItem(with: nil)
-            subtitleCues.removeAll()
-            resetSubtitlePosition()
-            subtitleLoadState = .idle
+            playbackEngine.replaceCurrentItem(with: nil)
+            subtitleSession.reset()
             currentTime = 0
             duration = 0
+            clearLoop()
             nowPlayingController.clear()
             return
         }
@@ -533,13 +528,12 @@ import Observation
 
         // 必须先暂停：replaceCurrentItem 不会停下正在播放的 AVPlayer，
         // 新曲目会带着原速率直接开播，而 isPlaying 已被置 false，声音与按钮状态脱节。
-        player.pause()
-        player.replaceCurrentItem(with: AVPlayerItem(url: selectedTrack.url))
+        playbackEngine.pause()
+        playbackEngine.replaceCurrentItem(with: selectedTrack.url)
         isPlaying = false
         currentTime = 0
         duration = selectedTrack.duration ?? 0
-        loopStart = nil
-        loopEnd = nil
+        clearLoop()
         loadSubtitles(for: selectedTrack)
 
         refreshDurations(for: [selectedTrack])
@@ -554,15 +548,11 @@ import Observation
         subtitleLoadTask?.cancel()
 
         guard let subtitleURL = track.subtitleURL else {
-            subtitleCues = []
-            resetSubtitlePosition()
-            subtitleLoadState = .missing
+            subtitleSession.markMissing()
             return
         }
 
-        subtitleCues = []
-        resetSubtitlePosition()
-        subtitleLoadState = .loading
+        subtitleSession.beginLoading()
 
         let trackID = track.id
         subtitleLoadTask = Task.detached { [subtitleURL, trackID] in
@@ -571,9 +561,7 @@ import Observation
 
             await MainActor.run { [weak self] in
                 guard let self, selectedTrackID == trackID else { return }
-                subtitleCues = cues
-                subtitleLoadState = cues.isEmpty ? .failed : .loaded
-                updateSubtitleIndex(at: currentTime)
+                subtitleSession.apply(cues, at: currentTime)
                 subtitleLoadTask = nil
             }
         }
@@ -582,29 +570,25 @@ import Observation
     private func handlePlaybackTick(_ seconds: TimeInterval) {
         guard seconds.isFinite else { return }
 
-        if let itemDuration = player.currentItem?.duration.seconds, itemDuration.isFinite,
-            itemDuration > 0, duration != itemDuration
+        if let itemDuration = playbackEngine.currentItemDuration,
+            duration != itemDuration
         {
             // @Observable 的写入不做相等性去重，不加判断会每 80ms 触发一次无谓的视图失效。
             duration = itemDuration
         }
 
         currentTime = seconds
-        updateSubtitleIndex(at: seconds)
+        subtitleSession.updatePosition(at: seconds)
 
         if let loopStart, let loopEnd, loopEnd > loopStart, seconds >= loopEnd {
             seek(to: loopStart)
             if isPlaying {
-                player.playImmediately(atRate: Float(playbackRate))
+                playbackEngine.play(rate: playbackRate)
             }
         }
     }
 
-    private func handlePlaybackFinished(_ notification: Notification) {
-        if let endedItem = notification.object as? AVPlayerItem, endedItem !== player.currentItem {
-            return
-        }
-
+    private func handlePlaybackFinished() {
         if let loopStart, let loopEnd, loopEnd > loopStart {
             seek(to: loopStart)
             play()
@@ -625,82 +609,12 @@ import Observation
         }
     }
 
-    private func updateSubtitleIndex(at seconds: TimeInterval) {
-        guard !subtitleCues.isEmpty else {
-            resetSubtitlePosition()
-            return
-        }
-
-        let position = subtitlePosition(at: seconds)
-        if currentSubtitleIndex != position.current {
-            currentSubtitleIndex = position.current
-        }
-        if nextSubtitleIndex != position.next {
-            nextSubtitleIndex = position.next
-        }
-    }
-
-    private func subtitlePosition(
-        at seconds: TimeInterval
-    ) -> (current: Int?, next: Int?) {
-        var lowerBound = subtitleCues.startIndex
-        var upperBound = subtitleCues.endIndex
-
-        while lowerBound < upperBound {
-            let middleIndex = lowerBound + (upperBound - lowerBound) / 2
-            let cue = subtitleCues[middleIndex]
-
-            if seconds < cue.start {
-                upperBound = middleIndex
-            } else if seconds > cue.end {
-                lowerBound = middleIndex + 1
-            } else {
-                let nextIndex = subtitleCues.indices.contains(middleIndex + 1)
-                    ? middleIndex + 1
-                    : nil
-                return (middleIndex, nextIndex)
-            }
-        }
-
-        let nextIndex = subtitleCues.indices.contains(lowerBound)
-            ? lowerBound
-            : nil
-        return (nil, nextIndex)
-    }
-
-    private func resetSubtitlePosition() {
-        currentSubtitleIndex = nil
-        nextSubtitleIndex = nil
-    }
-
     private func loadPersistedLibrary() {
-        guard
-            let data = UserDefaults.standard.data(forKey: Keys.storedTracks),
-            let storedTracks = try? JSONDecoder().decode([StoredTrack].self, from: data)
-        else {
-            return
-        }
+        let library = persistence.loadLibrary()
+        tracks = library.tracks
+        selectedTrackID = library.selectedTrackID
 
-        tracks = Self.deduplicatedTracks(storedTracks.compactMap { storedTrack in
-            let url = URL(filePath: storedTrack.path)
-            guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)),
-                Self.isPlayableMediaURL(url)
-            else {
-                return nil
-            }
-            return ListeningTrack(url: url, id: storedTrack.id, duration: storedTrack.duration)
-        })
-
-        if let selectedIDString = UserDefaults.standard.string(forKey: Keys.selectedTrackID),
-            let selectedID = UUID(uuidString: selectedIDString),
-            tracks.contains(where: { $0.id == selectedID })
-        {
-            selectedTrackID = selectedID
-        } else {
-            selectedTrackID = tracks.first?.id
-        }
-
-        if tracks.count != storedTracks.count {
+        if library.needsRewrite {
             persistLibrary()
         }
 
@@ -709,22 +623,7 @@ import Observation
     }
 
     private func persistLibrary() {
-        let storedTracks = tracks.map {
-            StoredTrack(
-                id: $0.id,
-                path: $0.url.path(percentEncoded: false),
-                duration: $0.duration
-            )
-        }
-        if let data = try? JSONEncoder().encode(storedTracks) {
-            UserDefaults.standard.set(data, forKey: Keys.storedTracks)
-        }
-
-        if let selectedTrackID {
-            UserDefaults.standard.set(selectedTrackID.uuidString, forKey: Keys.selectedTrackID)
-        } else {
-            UserDefaults.standard.removeObject(forKey: Keys.selectedTrackID)
-        }
+        persistence.saveLibrary(tracks: tracks, selectedTrackID: selectedTrackID)
     }
 
     private func refreshDurations(for tracks: [ListeningTrack]) {
@@ -733,7 +632,7 @@ import Observation
             let trackURL = track.url
             durationLoadTasks[trackID]?.cancel()
             durationLoadTasks[trackID] = Task.detached { [trackID, trackURL] in
-                let loadedDuration = await Self.loadDuration(for: trackURL)
+                let loadedDuration = await MediaDurationLoader.loadDuration(for: trackURL)
                 guard !Task.isCancelled else { return }
 
                 await MainActor.run { [weak self] in
@@ -768,32 +667,4 @@ import Observation
         }
     }
 
-    private static func deduplicatedTracks(_ tracks: [ListeningTrack]) -> [ListeningTrack] {
-        var knownMediaKeys = Set<String>()
-        return tracks.filter { track in
-            knownMediaKeys.insert(MediaDiscoveryService.mediaIdentityKey(for: track.url)).inserted
-        }
-    }
-
-    private static func defaultPlaybackRate() -> Double {
-        let storedRate = UserDefaults.standard.double(forKey: Keys.playbackRate)
-        return storedRate >= 0.25 ? min(2.0, storedRate) : 1.0
-    }
-
-    private static func defaultPlaybackMode() -> PlaybackMode {
-        PlaybackMode(rawValue: UserDefaults.standard.string(forKey: Keys.playbackMode) ?? "")
-            ?? .sequence
-    }
-
-    private static func defaultBool(_ key: String, fallback: Bool) -> Bool {
-        guard UserDefaults.standard.object(forKey: key) != nil else { return fallback }
-        return UserDefaults.standard.bool(forKey: key)
-    }
-
-    nonisolated private static func loadDuration(for url: URL) async -> TimeInterval? {
-        let asset = AVURLAsset(url: url)
-        guard let duration = try? await asset.load(.duration) else { return nil }
-        let seconds = duration.seconds
-        return seconds.isFinite && seconds > 0 ? seconds : nil
-    }
 }

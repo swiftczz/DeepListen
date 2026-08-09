@@ -19,7 +19,7 @@ struct PlayerDetailView: View {
                     VStack(alignment: .leading, spacing: 24) {
                         PlayerHeaderView(track: track)
                         TransportBarView(theme: theme)
-                        ABLoopView(theme: theme)
+                        ABLoopView()
                         SubtitleControlsView(theme: theme)
                     }
                     .frame(maxWidth: 1120, alignment: .leading)

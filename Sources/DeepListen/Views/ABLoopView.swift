@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ABLoopView: View {
     @Environment(PlayerStore.self) private var player
-    var theme: AppThemeColor
 
     var body: some View {
         GroupBox {
@@ -19,10 +18,6 @@ struct ABLoopView: View {
                         loopButtons
                     }
                 }
-
-                if let loopStart = player.loopStart {
-                    loopMarkers(loopStart: loopStart)
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         } label: {
@@ -38,6 +33,16 @@ struct ABLoopView: View {
 
     private var loopButtons: some View {
         HStack(spacing: 10) {
+            Button {
+                player.setSubtitleLooping(!player.isSubtitleLooping)
+            } label: {
+                Label("循环本句", systemImage: "repeat.1")
+            }
+            .disabled(player.subtitleForSentenceLoop == nil && !player.isSubtitleLooping)
+            .help(player.isSubtitleLooping ? "停止循环本句" : "循环当前字幕句")
+            .accessibilityValue(player.isSubtitleLooping ? "已开启" : "已关闭")
+            .accessibilityHint("使用当前字幕的起止时间设置 A、B 点")
+
             Button {
                 player.setLoopStart()
             } label: {
@@ -58,33 +63,5 @@ struct ABLoopView: View {
             }
             .disabled(player.loopStart == nil && player.loopEnd == nil)
         }
-    }
-
-    private func loopMarkers(loopStart: TimeInterval) -> some View {
-        HStack(spacing: 10) {
-            Capsule()
-                .fill(theme.color)
-                .frame(width: 22, height: 6)
-                .accessibilityHidden(true)
-
-            Text("A \(loopStart.formattedPlaybackTime)")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            if let loopEnd = player.loopEnd {
-                Text("B \(loopEnd.formattedPlaybackTime)")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(loopAccessibilityLabel(loopStart: loopStart))
-    }
-
-    private func loopAccessibilityLabel(loopStart: TimeInterval) -> String {
-        if let loopEnd = player.loopEnd {
-            return "A 点 \(loopStart.formattedPlaybackTime)，B 点 \(loopEnd.formattedPlaybackTime)"
-        }
-        return "A 点 \(loopStart.formattedPlaybackTime)"
     }
 }
