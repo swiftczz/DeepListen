@@ -14,6 +14,7 @@ struct PlayerPersistence {
         static let playbackMode = "playbackMode"
         static let showSubtitles = "showSubtitles"
         static let showSubtitleContext = "showSubtitleContext"
+        static let playbackPositions = "playbackPositions"
     }
 
     private struct StoredTrack: Codable {
@@ -61,6 +62,26 @@ struct PlayerPersistence {
 
     func saveShowSubtitleContext(_ isShown: Bool) {
         defaults.set(isShown, forKey: Keys.showSubtitleContext)
+    }
+
+    func playbackPosition(for trackID: ListeningTrack.ID) -> TimeInterval {
+        let position = playbackPositions()[trackID.uuidString] ?? 0
+        return position.isFinite && position > 0 ? position : 0
+    }
+
+    func savePlaybackPosition(
+        _ position: TimeInterval,
+        for trackID: ListeningTrack.ID
+    ) {
+        guard position.isFinite else { return }
+
+        var positions = playbackPositions()
+        if position > 0 {
+            positions[trackID.uuidString] = position
+        } else {
+            positions.removeValue(forKey: trackID.uuidString)
+        }
+        savePlaybackPositions(positions)
     }
 
     func loadLibrary() -> PersistedPlayerLibrary {
@@ -126,6 +147,35 @@ struct PlayerPersistence {
         } else {
             defaults.removeObject(forKey: Keys.selectedTrackID)
         }
+
+        let validTrackIDs = Set(tracks.map { $0.id.uuidString })
+        let storedPositions = playbackPositions()
+        let validPositions = storedPositions.filter { validTrackIDs.contains($0.key) }
+        if validPositions.count != storedPositions.count {
+            savePlaybackPositions(validPositions)
+        }
+    }
+
+    private func playbackPositions() -> [String: TimeInterval] {
+        guard
+            let data = defaults.data(forKey: Keys.playbackPositions),
+            let positions = try? JSONDecoder().decode(
+                [String: TimeInterval].self,
+                from: data
+            )
+        else {
+            return [:]
+        }
+        return positions
+    }
+
+    private func savePlaybackPositions(_ positions: [String: TimeInterval]) {
+        guard !positions.isEmpty else {
+            defaults.removeObject(forKey: Keys.playbackPositions)
+            return
+        }
+        guard let data = try? JSONEncoder().encode(positions) else { return }
+        defaults.set(data, forKey: Keys.playbackPositions)
     }
 
     private func storedBool(forKey key: String, fallback: Bool) -> Bool {

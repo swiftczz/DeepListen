@@ -3,6 +3,9 @@ import SwiftUI
 struct TransportBarView: View {
     @Environment(PlayerStore.self) private var player
     @State private var showsSpeedPopover = false
+    @State private var backwardBounce = 0
+    @State private var forwardBounce = 0
+    @State private var modeBounce = 0
 
     var theme: AppThemeColor
 
@@ -26,6 +29,12 @@ struct TransportBarView: View {
         return number + "×"
     }
 
+    private var playbackRateFeedback: PlaybackFeedback? {
+        guard let feedback = player.playbackFeedback,
+              case .playbackRate = feedback.kind else { return nil }
+        return feedback
+    }
+
     var body: some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 14) {
@@ -43,6 +52,19 @@ struct TransportBarView: View {
                     Spacer(minLength: 0)
                     playbackControls
                 }
+            }
+        }
+        .onChange(of: player.playbackFeedback?.id) {
+            guard let feedback = player.playbackFeedback else { return }
+            switch feedback.kind {
+            case .skip(let seconds) where seconds < 0:
+                backwardBounce += 1
+            case .skip:
+                forwardBounce += 1
+            case .playbackMode:
+                modeBounce += 1
+            case .playbackRate:
+                break
             }
         }
     }
@@ -74,7 +96,7 @@ struct TransportBarView: View {
 
     private var playbackControls: some View {
         GlassEffectContainer(spacing: 10) {
-            HStack(spacing: 14) {
+            HStack(spacing: 12) {
                 transportButtons
                 playbackOptions
             }
@@ -90,7 +112,9 @@ struct TransportBarView: View {
                 label: "播放模式：\(player.playbackMode.title)",
                 systemImage: player.playbackMode.systemImage,
                 theme: theme,
-                isProminent: false
+                isProminent: false,
+                isSelected: player.playbackMode == .singleLoop,
+                bounceTrigger: modeBounce
             ) {
                 player.togglePlaybackMode()
             }
@@ -105,11 +129,14 @@ struct TransportBarView: View {
                 Text(speedLabel)
                     .font(.system(size: 14, weight: .semibold).monospacedDigit())
                     .foregroundStyle(player.playbackRate == 1 ? Color.primary : theme.color)
+                    .contentTransition(.numericText())
+                    .animation(.snappy, value: player.playbackRate)
                     .minimumScaleFactor(0.7)
                     .lineLimit(1)
             }
             .help(String(format: "倍速 %.2fx", player.playbackRate))
             .accessibilityValue(String(format: "%.2f 倍", player.playbackRate))
+            .playbackFeedbackOverlay(playbackRateFeedback, theme: theme)
             .popover(isPresented: $showsSpeedPopover, arrowEdge: .bottom) {
                 SpeedPopover(
                     rateBinding: $player.playbackRateSelection,
@@ -130,18 +157,95 @@ struct TransportBarView: View {
             ) {
                 player.togglePlayPause()
             }
-            .help(player.isPlaying ? "暂停" : "播放")
+            .help(player.isPlaying ? "暂停（空格）" : "播放（空格）")
 
-            IconButton(label: "后退 5 秒", systemImage: "gobackward.5", theme: theme, isProminent: false) {
+            IconButton(
+                label: "后退 5 秒",
+                systemImage: "gobackward.5",
+                theme: theme,
+                isProminent: false,
+                bounceTrigger: backwardBounce
+            ) {
                 player.skip(by: -5)
             }
-            .help("后退 5 秒")
+            .help("后退 5 秒（←）")
 
-            IconButton(label: "前进 5 秒", systemImage: "goforward.5", theme: theme, isProminent: false) {
+            IconButton(
+                label: "前进 5 秒",
+                systemImage: "goforward.5",
+                theme: theme,
+                isProminent: false,
+                bounceTrigger: forwardBounce
+            ) {
                 player.skip(by: 5)
             }
-            .help("前进 5 秒")
+            .help("前进 5 秒（→）")
         }
+    }
+}
+
+private struct PlaybackFeedbackHUD: View {
+    var feedback: PlaybackFeedback
+    var theme: AppThemeColor
+
+    private var title: String {
+        switch feedback.kind {
+        case .skip(let seconds):
+            return seconds < 0 ? "−\(abs(seconds)) 秒" : "+\(seconds) 秒"
+        case .playbackMode(let mode):
+            return mode.title
+        case .playbackRate(let rate):
+            return rate.formatted(.number.precision(.fractionLength(0...2))) + "×"
+        }
+    }
+
+    private var systemImage: String {
+        switch feedback.kind {
+        case .skip(let seconds):
+            return seconds < 0 ? "gobackward.5" : "goforward.5"
+        case .playbackMode(let mode):
+            return mode.systemImage
+        case .playbackRate:
+            return "speedometer"
+        }
+    }
+
+    private var foregroundColor: Color {
+        switch feedback.kind {
+        case .playbackMode(.singleLoop), .playbackRate:
+            return theme.color
+        default:
+            return .primary
+        }
+    }
+
+    var body: some View {
+        Label(title, systemImage: systemImage)
+            .font(.callout.weight(.semibold))
+            .foregroundStyle(foregroundColor)
+            .padding(.horizontal, 12)
+            .frame(height: 30)
+            .glassEffect(.regular, in: Capsule())
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(title)
+    }
+}
+
+private extension View {
+    func playbackFeedbackOverlay(
+        _ feedback: PlaybackFeedback?,
+        theme: AppThemeColor
+    ) -> some View {
+        overlay(alignment: .top) {
+            if let feedback {
+                PlaybackFeedbackHUD(feedback: feedback, theme: theme)
+                    .id(feedback.id)
+                    .offset(y: -38)
+                    .transition(.scale(scale: 0.92).combined(with: .opacity))
+                    .allowsHitTesting(false)
+            }
+        }
+        .animation(.easeOut(duration: 0.18), value: feedback?.id)
     }
 }
 
@@ -335,13 +439,14 @@ private struct GlassButton<Content: View>: View {
     var accessibilityLabel: String
     var theme: AppThemeColor
     var isProminent: Bool
+    var isSelected = false
     var action: () -> Void
     @ViewBuilder var content: Content
 
     var body: some View {
         Button(action: action) {
             content
-                .foregroundStyle(isProminent ? theme.selectionForegroundColor : Color.primary)
+                .foregroundStyle(foregroundColor)
                 .frame(width: 46, height: 46)
                 .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .glassEffect(
@@ -351,8 +456,15 @@ private struct GlassButton<Content: View>: View {
                     in: RoundedRectangle(cornerRadius: 10, style: .continuous)
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TransportButtonStyle())
         .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var foregroundColor: Color {
+        if isProminent {
+            return theme.selectionForegroundColor
+        }
+        return isSelected ? theme.color : .primary
     }
 }
 
@@ -361,6 +473,8 @@ private struct IconButton: View {
     var systemImage: String
     var theme: AppThemeColor
     var isProminent: Bool
+    var isSelected = false
+    var bounceTrigger = 0
     var action: () -> Void
 
     var body: some View {
@@ -368,10 +482,30 @@ private struct IconButton: View {
             accessibilityLabel: label,
             theme: theme,
             isProminent: isProminent,
+            isSelected: isSelected,
             action: action
         ) {
             Image(systemName: systemImage)
                 .font(.system(size: 18, weight: .semibold))
+                .contentTransition(.symbolEffect(.replace))
+                .symbolEffect(.bounce, value: bounceTrigger)
+                .animation(.snappy, value: systemImage)
         }
+    }
+}
+
+private struct TransportButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.94 : 1)
+            .opacity(configuration.isPressed ? 0.82 : 1)
+            .animation(
+                reduceMotion
+                    ? .easeOut(duration: 0.08)
+                    : .spring(duration: 0.22, bounce: 0.28),
+                value: configuration.isPressed
+            )
     }
 }

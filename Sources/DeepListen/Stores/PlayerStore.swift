@@ -29,6 +29,7 @@ import Observation
     var loopStart: TimeInterval?
     var loopEnd: TimeInterval?
     private(set) var isSubtitleLooping = false
+    private(set) var playbackFeedback: PlaybackFeedback?
 
     @ObservationIgnored private let playbackEngine = PlaybackEngine()
     @ObservationIgnored private let subtitleSession = SubtitleSession()
@@ -39,6 +40,8 @@ import Observation
     @ObservationIgnored private var libraryNoticeTask: Task<Void, Never>?
     @ObservationIgnored private var subtitleLoadTask: Task<Void, Never>?
     @ObservationIgnored private var importTask: Task<Void, Never>?
+    @ObservationIgnored private var playbackPositionSaveTask: Task<Void, Never>?
+    @ObservationIgnored private var playbackFeedbackTask: Task<Void, Never>?
     @ObservationIgnored private var durationLoadTasks: [ListeningTrack.ID: Task<Void, Never>] = [:]
 
     static let importableContentTypes = MediaDiscoveryService.importableContentTypes
@@ -61,7 +64,7 @@ import Observation
         }
 
         if selectedTrackID != nil {
-            loadCurrentTrack(autoplay: false)
+            loadCurrentTrack(autoplay: false, restoresSavedPosition: true)
         }
     }
 
@@ -69,6 +72,8 @@ import Observation
         libraryNoticeTask?.cancel()
         subtitleLoadTask?.cancel()
         importTask?.cancel()
+        playbackPositionSaveTask?.cancel()
+        playbackFeedbackTask?.cancel()
         durationLoadTasks.values.forEach { $0.cancel() }
         nowPlayingController.teardown()
     }
@@ -244,6 +249,7 @@ import Observation
             return
         }
 
+        savePlaybackPosition()
         selectedTrackID = id
         loadCurrentTrack(autoplay: autoplay)
         persistLibrary()
@@ -260,6 +266,7 @@ import Observation
         case .singleLoop:
             playbackMode = .sequence
         }
+        showPlaybackFeedback(.playbackMode(playbackMode))
     }
 
     func play() {
@@ -284,6 +291,7 @@ import Observation
     func pause() {
         playbackEngine.pause()
         isPlaying = false
+        savePlaybackPosition()
         updateNowPlaying()
     }
 
@@ -304,6 +312,13 @@ import Observation
     }
 
     func seek(to seconds: TimeInterval) {
+        seek(to: seconds, savesPlaybackPosition: true)
+    }
+
+    private func seek(
+        to seconds: TimeInterval,
+        savesPlaybackPosition: Bool
+    ) {
         guard seconds.isFinite else { return }
         let clampedSeconds = duration > 0
             ? min(max(seconds, 0), duration)
@@ -311,7 +326,18 @@ import Observation
         currentTime = clampedSeconds
         subtitleSession.updatePosition(at: clampedSeconds)
         playbackEngine.seek(to: clampedSeconds)
+        if savesPlaybackPosition {
+            schedulePlaybackPositionSave()
+        }
         updateNowPlaying()
+    }
+
+    /// 由应用生命周期调用，立即保存当前曲目和播放位置。
+    func savePlaybackPosition() {
+        playbackPositionSaveTask?.cancel()
+        playbackPositionSaveTask = nil
+        guard let selectedTrackID else { return }
+        persistence.savePlaybackPosition(currentTime, for: selectedTrackID)
     }
 
     func skip(by seconds: TimeInterval) {
@@ -319,6 +345,7 @@ import Observation
         if isPlaying {
             playbackEngine.play(rate: playbackRate)
         }
+        showPlaybackFeedback(.skip(seconds: Int(seconds.rounded())))
     }
 
     func jumpToSubtitle(_ cue: SubtitleCue) {
@@ -355,6 +382,7 @@ import Observation
         if isPlaying {
             playbackEngine.setRate(clamped)
         }
+        showPlaybackFeedback(.playbackRate(clamped))
         updateNowPlaying()
     }
 
@@ -505,7 +533,10 @@ import Observation
         }
     }
 
-    private func loadCurrentTrack(autoplay: Bool) {
+    private func loadCurrentTrack(
+        autoplay: Bool,
+        restoresSavedPosition: Bool = false
+    ) {
         guard let index = selectedTrackIndex else {
             playbackEngine.pause()
             isPlaying = false
@@ -531,8 +562,11 @@ import Observation
         playbackEngine.pause()
         playbackEngine.replaceCurrentItem(with: selectedTrack.url)
         isPlaying = false
-        currentTime = 0
         duration = selectedTrack.duration ?? 0
+        currentTime = restoresSavedPosition
+            ? restoredPlaybackPosition(for: selectedTrack)
+            : 0
+        playbackEngine.seek(to: currentTime)
         clearLoop()
         loadSubtitles(for: selectedTrack)
 
@@ -581,7 +615,7 @@ import Observation
         subtitleSession.updatePosition(at: seconds)
 
         if let loopStart, let loopEnd, loopEnd > loopStart, seconds >= loopEnd {
-            seek(to: loopStart)
+            seek(to: loopStart, savesPlaybackPosition: false)
             if isPlaying {
                 playbackEngine.play(rate: playbackRate)
             }
@@ -590,14 +624,14 @@ import Observation
 
     private func handlePlaybackFinished() {
         if let loopStart, let loopEnd, loopEnd > loopStart {
-            seek(to: loopStart)
+            seek(to: loopStart, savesPlaybackPosition: false)
             play()
             return
         }
 
         switch playbackMode {
         case .singleLoop:
-            seek(to: 0)
+            seek(to: 0, savesPlaybackPosition: false)
             play()
         case .sequence:
             guard let currentIndex = selectedIndex, currentIndex + 1 < tracks.count else {
@@ -624,6 +658,47 @@ import Observation
 
     private func persistLibrary() {
         persistence.saveLibrary(tracks: tracks, selectedTrackID: selectedTrackID)
+    }
+
+    private func restoredPlaybackPosition(for track: ListeningTrack) -> TimeInterval {
+        let storedPosition = persistence.playbackPosition(for: track.id)
+        guard storedPosition > 0 else { return 0 }
+
+        guard let duration = track.duration, duration > 0 else {
+            return storedPosition
+        }
+
+        // 已经播放到结尾的曲目下次从头开始。
+        guard storedPosition < duration - 0.5 else { return 0 }
+        return min(storedPosition, duration)
+    }
+
+    private func schedulePlaybackPositionSave() {
+        playbackPositionSaveTask?.cancel()
+        guard let trackID = selectedTrackID else { return }
+        let position = currentTime
+
+        playbackPositionSaveTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled, let self, selectedTrackID == trackID else { return }
+            persistence.savePlaybackPosition(position, for: trackID)
+            playbackPositionSaveTask = nil
+        }
+    }
+
+    private func showPlaybackFeedback(_ kind: PlaybackFeedback.Kind) {
+        playbackFeedbackTask?.cancel()
+        let feedback = PlaybackFeedback(kind: kind)
+        playbackFeedback = feedback
+
+        playbackFeedbackTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(850))
+            guard !Task.isCancelled, let self else { return }
+            if playbackFeedback == feedback {
+                playbackFeedback = nil
+            }
+            playbackFeedbackTask = nil
+        }
     }
 
     private func refreshDurations(for tracks: [ListeningTrack]) {

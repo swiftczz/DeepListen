@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(PlayerStore.self) private var player
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage(AppThemeColor.storageKey) private var storedTheme = AppThemeColor.defaultTheme.rawValue
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var userPrefersSidebarHidden = false
@@ -108,6 +109,11 @@ struct ContentView: View {
         }
         .onDisappear {
             playbackKeyboardMonitor.stop()
+            player.savePlaybackPosition()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase != .active else { return }
+            player.savePlaybackPosition()
         }
         .onChange(of: isSidebarSearchFocused) { _, isFocused in
             playbackKeyboardMonitor.isEnabled = !isFocused
