@@ -20,13 +20,15 @@ struct ABLoopView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-        } label: {
-            Label("A/B 片段练习", systemImage: "repeat")
         }
     }
 
     private var loopStatus: some View {
-        Text(player.loopSummary)
+        Text(
+            player.loopStart == nil && player.loopEnd == nil
+                ? "A/B 片段练习"
+                : player.loopSummary
+        )
             .font(.callout)
             .foregroundStyle(.secondary)
     }
