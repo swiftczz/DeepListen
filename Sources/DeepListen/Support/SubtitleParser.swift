@@ -7,32 +7,54 @@ enum SubtitleParser {
         )
     )
 
+    /// 内联的字体/位置标签（`<i>`、`<c.yellow>` 等），只在正文里出现，需整体剥离。
+    /// 提到循环外：`replacingOccurrences(options: .regularExpression)` 每次调用都会
+    /// 重新编译一遍正则，而字幕文件动辄数百条。
+    /// 用 `NSRegularExpression` 而非 `Regex` 字面量：后者不是 `Sendable`，
+    /// 无法作为静态存储被解析所在的 detached task 共享。
+    private static let markupTag = try! NSRegularExpression(pattern: "<[^>]+>")
+
     static func parse(url: URL) -> [SubtitleCue] {
         guard let text = decodeText(at: url) else { return [] }
         return parse(text)
     }
 
-    /// 按编码逐个尝试，并用"必须含有时间轴箭头"来校验结果。
+    /// 按编码逐个尝试，命中即返回。
     /// 关键：UTF-16 / Latin-1 对几乎任意字节都能"解码成功"但产出乱码，
-    /// 只有加上这个校验才能把乱码候选排除掉，而不是把乱码当正文显示。
+    /// 只有加上 `isDecodedSubtitle` 校验才能把乱码候选排除掉，而不是把乱码当正文显示。
     private static func decodeText(at url: URL) -> String? {
-        var candidates: [String] = []
-
         // 系统嗅探优先：能正确处理带 BOM 的 UTF-8 / UTF-16。
         var detectedEncoding = String.Encoding.utf8
-        if let text = try? String(contentsOf: url, usedEncoding: &detectedEncoding) {
-            candidates.append(text)
+        if let text = try? String(contentsOf: url, usedEncoding: &detectedEncoding),
+            isDecodedSubtitle(text)
+        {
+            return text
         }
 
-        if let data = try? Data(contentsOf: url) {
-            for encoding in [String.Encoding.utf8, gb18030, .utf16, .isoLatin1] {
-                if let text = String(data: data, encoding: encoding) {
-                    candidates.append(text)
-                }
+        guard let data = try? Data(contentsOf: url) else { return nil }
+
+        for encoding in [String.Encoding.utf8, gb18030, .utf16, .isoLatin1] {
+            if let text = String(data: data, encoding: encoding), isDecodedSubtitle(text) {
+                return text
             }
         }
 
-        return candidates.first { $0.contains("-->") }
+        return nil
+    }
+
+    /// 解码结果必须含有时间轴箭头才算真正解对了编码。
+    private static func isDecodedSubtitle(_ text: String) -> Bool {
+        text.contains("-->")
+    }
+
+    /// 绝大多数字幕行不含标签，先做一次廉价判断再走正则。
+    private static func removingMarkupTags(from text: String) -> String {
+        guard text.contains("<") else { return text }
+        return markupTag.stringByReplacingMatches(
+            in: text,
+            range: NSRange(text.startIndex..., in: text),
+            withTemplate: ""
+        )
     }
 
     static func parse(_ text: String) -> [SubtitleCue] {
@@ -61,9 +83,7 @@ enum SubtitleParser {
                 continue
             }
 
-            let cueText = lines[(timingLineIndex + 1)...]
-                .joined(separator: " ")
-                .replacingOccurrences(of: #"<[^>]+>"#, with: "", options: .regularExpression)
+            let cueText = removingMarkupTags(from: lines[(timingLineIndex + 1)...].joined(separator: " "))
                 .trimmingCharacters(in: .whitespacesAndNewlines)
 
             guard !cueText.isEmpty else { continue }

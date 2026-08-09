@@ -47,7 +47,11 @@ final class PlaybackEngine {
             forInterval: CMTime(seconds: 0.08, preferredTimescale: 600),
             queue: .main
         ) { time in
-            Task { @MainActor in
+            // 观察者已经在主队列上回调，这里只是把这个事实告诉编译器。
+            // 若改用 `Task { @MainActor in ... }`，回调会被推迟到下一次调度：
+            // 期间发生的 seek（跳转、A/B 回跳、快进快退）会被这个携带旧时间戳的
+            // tick 覆盖回去，表现为进度条和字幕闪回一下。顺带省掉每秒约 12 次任务分配。
+            MainActor.assumeIsolated {
                 handlers.tick(time.seconds)
             }
         }

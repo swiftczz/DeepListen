@@ -8,18 +8,25 @@ struct SidebarView: View {
     var theme: AppThemeColor
     var searchFocus: FocusState<Bool>.Binding
 
-    private var visibleTracks: [ListeningTrack] {
-        guard !searchText.isEmpty else { return player.tracks }
-        return player.tracks.filter {
-            $0.title.localizedStandardContains(searchText)
-                || $0.url.lastPathComponent.localizedStandardContains(searchText)
-        }
-    }
+    /// 单次遍历同时完成过滤与编号。编号取自完整媒体库中的位置，
+    /// 所以搜索时行号仍是曲目在库里的真实序号。
+    ///
+    /// 编号过去是一个计算属性形式的字典，且在 `ForEach` 闭包内按行访问——
+    /// 每渲染一行就重建一次全表字典，整体是 O(N²)。
+    private var visibleListings: [TrackListing] {
+        let isSearching = !searchText.isEmpty
 
-    private var displayNumbers: [ListeningTrack.ID: Int] {
-        Dictionary(uniqueKeysWithValues: player.tracks.enumerated().map { index, track in
-            (track.id, index + 1)
-        })
+        return player.tracks.enumerated().compactMap { index, track in
+            if isSearching {
+                guard
+                    track.title.localizedStandardContains(searchText)
+                        || track.url.lastPathComponent.localizedStandardContains(searchText)
+                else {
+                    return nil
+                }
+            }
+            return TrackListing(track: track, displayNumber: index + 1)
+        }
     }
 
     var body: some View {
@@ -44,25 +51,31 @@ struct SidebarView: View {
     }
 
     private var libraryList: some View {
-        List(selection: $selectedTrackIDs) {
+        // 求值一次后复用：过滤要走全表 localizedStandardContains，
+        // 而 body 里有多处要用到结果。
+        let listings = visibleListings
+
+        return List(selection: $selectedTrackIDs) {
             Section("听力音频") {
-                if visibleTracks.isEmpty {
+                if listings.isEmpty {
                     Text("没有匹配的音频")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .padding(.vertical, 10)
                 }
 
-                ForEach(visibleTracks) { track in
+                ForEach(listings) { listing in
                     TrackRow(
-                        track: track,
-                        displayNumber: displayNumbers[track.id] ?? 0,
-                        isCurrentTrack: player.selectedTrackID == track.id,
-                        isPlaying: player.selectedTrackID == track.id && player.isPlaying,
+                        track: listing.track,
+                        displayNumber: listing.displayNumber,
+                        isCurrentTrack: player.selectedTrackID == listing.id,
+                        isPlaying: player.selectedTrackID == listing.id && player.isPlaying,
                         theme: theme
                     )
-                    .tag(track.id)
-                    .listRowBackground(rowBackground(isSelected: selectedTrackIDs.contains(track.id)))
+                    .tag(listing.id)
+                    .listRowBackground(
+                        rowBackground(isSelected: selectedTrackIDs.contains(listing.id))
+                    )
                 }
                 .onMove(perform: moveHandler)
             }
@@ -152,7 +165,7 @@ struct SidebarView: View {
     }
 
     private func keepSelectionVisible() {
-        let visibleTrackIDs = Set(visibleTracks.map(\.id))
+        let visibleTrackIDs = Set(visibleListings.map(\.id))
         selectedTrackIDs.formIntersection(visibleTrackIDs)
 
         if selectedTrackIDs.isEmpty,
@@ -163,7 +176,7 @@ struct SidebarView: View {
         }
     }
 
-    /// 仅在未搜索时启用拖拽排序：此时 visibleTracks 与 player.tracks 顺序一致，偏移量可直接透传。
+    /// 仅在未搜索时启用拖拽排序：此时 visibleListings 与 player.tracks 顺序一致，偏移量可直接透传。
     /// 搜索过滤时返回 nil 禁用移动，避免过滤后的下标错位。
     private var moveHandler: ((IndexSet, Int) -> Void)? {
         guard searchText.isEmpty else { return nil }
@@ -198,6 +211,15 @@ struct SidebarView: View {
             selectedTrackIDs.removeAll()
         }
     }
+}
+
+/// 曲目 + 它在完整媒体库中的序号。把编号随行一起算好，
+/// 行视图就不必回头去查全表位置。
+private struct TrackListing: Identifiable {
+    var track: ListeningTrack
+    var displayNumber: Int
+
+    var id: ListeningTrack.ID { track.id }
 }
 
 private struct TrackRow: View {

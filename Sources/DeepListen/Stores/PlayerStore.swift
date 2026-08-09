@@ -652,8 +652,7 @@ import Observation
             persistLibrary()
         }
 
-        // 只解析没有缓存时长的曲目，避免每次启动为整库并发起解析任务。
-        refreshDurations(for: tracks.filter { $0.duration == nil })
+        refreshDurations(for: tracks)
     }
 
     private func persistLibrary() {
@@ -701,8 +700,10 @@ import Observation
         }
     }
 
+    /// 只解析尚未缓存时长的曲目。已缓存时重复解析不仅白建一次 AVURLAsset，
+    /// 还会在批次排空时多触发一次全库落盘——切歌路径每次都会走到这里。
     private func refreshDurations(for tracks: [ListeningTrack]) {
-        for track in tracks {
+        for track in tracks where track.duration == nil {
             let trackID = track.id
             let trackURL = track.url
             durationLoadTasks[trackID]?.cancel()
@@ -736,8 +737,12 @@ import Observation
             return
         }
 
-        tracks[index].duration = loadedDuration
-        if selectedTrackID == id {
+        // 同 handlePlaybackTick：@Observable 的写入不做相等性去重，
+        // 写入同值会白白让整个曲目列表失效。
+        if tracks[index].duration != loadedDuration {
+            tracks[index].duration = loadedDuration
+        }
+        if selectedTrackID == id, duration != loadedDuration {
             duration = loadedDuration
         }
     }
