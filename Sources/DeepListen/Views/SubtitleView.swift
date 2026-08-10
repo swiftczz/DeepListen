@@ -126,12 +126,12 @@ struct SubtitleView: View {
             .padding(.vertical, 18)
     }
 
-    /// 单句模式：句间空隙（无当前句）时预览下一句，
-    /// 待其开始播放再原地由灰转主题色，不跳版。
+    /// 单句模式：句间空隙继续保持上一句完整高亮；下一句真正开始时
+    /// 再切换并立即高亮首词。第一句开始前仍以灰色预览。
     @ViewBuilder
     private var currentSubtitleView: some View {
         Group {
-            if let cue = player.currentSubtitle {
+            if let cue = player.displayedSubtitle {
                 KaraokeSubtitleText(
                     cue: cue,
                     themeColor: theme.color
@@ -151,7 +151,7 @@ struct SubtitleView: View {
     /// 上下文模式：整篇文稿按"当前句样式"铺开——当前句主题色大字，
     /// 其余句子灰色小字，点击任意句跳转播放。
     private var fullTranscriptView: some View {
-        let currentSubtitleID = player.currentSubtitle?.id
+        let currentSubtitleID = player.displayedSubtitle?.id
 
         return LazyVStack(alignment: .leading, spacing: 14) {
             ForEach(player.subtitleCues) { cue in

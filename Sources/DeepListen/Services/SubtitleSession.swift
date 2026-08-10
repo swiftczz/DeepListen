@@ -3,6 +3,9 @@ import Observation
 
 @MainActor
 @Observable final class SubtitleSession {
+    /// 覆盖播放器时间基转换产生的亚帧级误差，不改变实际播放位置。
+    private static let cueStartTolerance: TimeInterval = 0.005
+
     private(set) var cues: [SubtitleCue] = []
     private(set) var currentIndex: Int?
     private(set) var nextIndex: Int?
@@ -18,19 +21,24 @@ import Observation
         return cues[nextIndex]
     }
 
-    /// 字幕之间存在空档时继续沿用上一句，直到下一句真正开始。
-    /// 第一条字幕开始前没有上一句，因此仍返回 nil。
-    var sentenceLoopCue: SubtitleCue? {
-        if let currentCue {
-            return currentCue
-        }
-
+    /// 展示状态在句间空档继续沿用上一句，直到下一句真正开始。
+    /// 这样上一句会保持放大和完整高亮，不会提前闪成下一句的灰色预览。
+    var displayedIndex: Int? {
+        if let currentIndex { return currentIndex }
         if let nextIndex {
             guard nextIndex > cues.startIndex else { return nil }
-            return cues[nextIndex - 1]
+            return nextIndex - 1
         }
+        return cues.indices.last
+    }
 
-        return cues.last
+    var displayedCue: SubtitleCue? {
+        guard let displayedIndex, cues.indices.contains(displayedIndex) else { return nil }
+        return cues[displayedIndex]
+    }
+
+    var sentenceLoopCue: SubtitleCue? {
+        displayedCue
     }
 
     func beginLoading() {
@@ -80,7 +88,7 @@ import Observation
             let middleIndex = lowerBound + (upperBound - lowerBound) / 2
             let cue = cues[middleIndex]
 
-            if seconds < cue.start {
+            if seconds < cue.start - Self.cueStartTolerance {
                 upperBound = middleIndex
             } else if seconds > cue.end {
                 lowerBound = middleIndex + 1

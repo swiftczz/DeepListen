@@ -55,7 +55,7 @@ struct PlayerDetailView: View {
                             // 换曲目后恢复自动跟随，避免上一曲的手动滚动状态残留
                             autoScrollPaused = false
                         }
-                        .onChange(of: player.currentSubtitleIndex) {
+                        .onChange(of: player.displayedSubtitleIndex) {
                             scrollToCurrentSubtitle(using: scrollProxy)
                         }
                         .onChange(of: player.showSubtitleContext) { _, isOn in
@@ -89,7 +89,7 @@ struct PlayerDetailView: View {
         if autoScrollPaused,
             player.showSubtitleContext,
             player.showSubtitles,
-            player.currentSubtitle != nil
+            player.displayedSubtitle != nil
         {
             Button {
                 autoScrollPaused = false
@@ -111,7 +111,7 @@ struct PlayerDetailView: View {
     private func scrollToCurrentSubtitle(using proxy: ScrollViewProxy) {
         guard player.showSubtitleContext,
             !autoScrollPaused,
-            let currentSubtitleID = player.currentSubtitle?.id
+            let currentSubtitleID = player.displayedSubtitle?.id
         else {
             return
         }

@@ -108,6 +108,14 @@ import Observation
         subtitleSession.currentCue
     }
 
+    var displayedSubtitleIndex: Int? {
+        subtitleSession.displayedIndex
+    }
+
+    var displayedSubtitle: SubtitleCue? {
+        subtitleSession.displayedCue
+    }
+
     /// 字幕之间存在空档时继续沿用上一句，直到下一句真正开始。
     /// 第一条字幕开始前没有上一句，因此仍返回 nil。
     var subtitleForSentenceLoop: SubtitleCue? {
