@@ -1,173 +1,203 @@
 # DeepListen
 
-**简体中文** | [English](README.en.md)
+**English** | [简体中文](README_CN.md)
 
-一款专为英语精听训练设计的原生 macOS 播放器。导入本地音频、视频和同名字幕，即可使用逐词高亮、全文稿、倍速播放及 A/B 循环反复练习。
+> A native macOS player that helps English learners hear more, understand more, and practice difficult lines until they become clear.
 
 [![Release](https://img.shields.io/github/v/release/swiftczz/DeepListen?label=release)](https://github.com/swiftczz/DeepListen/releases/latest)
 ![Platform](https://img.shields.io/badge/macOS-26.0%2B-blue)
 ![Swift](https://img.shields.io/badge/Swift-6.3-orange)
 
-## 界面预览
+DeepListen is built for people learning English outside an English-speaking environment. When daily exposure is limited, movies, podcasts, interviews, and lessons are valuable—but natural speech is often too fast to study effectively with an ordinary media player.
 
-![DeepListen 主界面](docs/images/deeplisten-main.png)
+DeepListen turns your local audio or video and subtitles into a focused listening workspace. Follow speech with word-by-word highlighting, click any sentence to hear it again, slow down difficult passages, loop one sentence, or define an A/B segment for repeated practice.
 
-## 核心功能
+## Preview
 
-### 媒体库
+![DeepListen main window](docs/images/deeplisten-main.png)
 
-- 拖入文件或文件夹，也可通过工具栏或 Finder 打开音视频
-- 递归扫描文件夹，跳过隐藏文件，并按文件名自然排序
-- 支持拖拽排序、搜索、多选删除及「在访达中显示」
-- 自动去重并持久化媒体库、手动顺序、曲目时长和当前选中项
-- 支持格式：`mp3` `m4a` `aac` `wav` `aiff` `aif` `caf` `flac` `mp4` `m4v` `mov` `avi` `mkv`
+## Why DeepListen?
 
-### 字幕精听
+### Create your own English environment
 
-- 自动匹配与媒体文件**同名**的 `.srt` / `.SRT` 或 `.vtt` / `.VTT` 字幕
-- 支持 UTF-8、UTF-16、GB18030 和 ISO-Latin1 编码
-- 自动清理字幕中的 HTML 标签，并按时间重新排序
-- 当前字幕根据播放进度逐词高亮；普通字幕没有逐词时间戳时，会按整句时长估算进度
-- 可在「当前句」与「全文上下文」之间切换，点击任意字幕即可跳转
-- 全文稿自动跟随当前句；手动滚动后可一键恢复自动跟随
+Practice with material you actually care about: films, TV shows, podcasts, courses, interviews, or exam recordings. DeepListen works with local files, so your listening practice is not limited to a particular content platform.
 
-### 播放控制
+### Connect what you hear with what you read
 
-- 播放 / 暂停、前进 / 后退 5 秒，以及进度条精确定位和悬停时间预览
-- 0.25x–2.0x 倍速播放，步进 0.25x
-- 顺序播放与单曲循环，自动保存倍速和播放模式
-- 支持 macOS 系统媒体控制、上一首 / 下一首和 5 秒快进 / 快退
+The active subtitle is enlarged and highlighted word by word as the audio plays. This makes it easier to notice connected speech, reductions, rhythm, and words that disappear when native speakers talk naturally.
 
-### A/B 片段练习
+### Repeat the exact part you missed
 
-- 在当前位置设置 A 点和 B 点
-- 时间轴显示片段标记及高亮区间
-- 播放到 B 点后自动跳回 A 点，也可随时清除片段
+Click any subtitle to jump directly to it. Use **Loop Sentence** for one-line repetition, or set A and B points when the difficult passage crosses subtitle boundaries.
 
-### 原生界面
+### Practice at your own pace
 
-- 9 种主题色：系统、蓝、紫、粉、红、橙、黄、绿、石墨
-- 主题色和字幕显示偏好自动保存
-- 自适应窄窗口布局，空间不足时自动收起侧边栏
-- 针对 VoiceOver、键盘导航和 macOS Liquid Glass 进行适配
+Slow playback down to analyze pronunciation, return to normal speed to test comprehension, and move backward or forward five seconds without breaking concentration.
 
-## 安装
+## A Simple Practice Routine
 
-1. 前往 [Releases](https://github.com/swiftczz/DeepListen/releases/latest) 下载对应架构或 universal 版本的 DMG。
-2. 打开 DMG，将 `DeepListen.app` 拖入「应用程序」。
-3. 首次启动时右键应用并选择「打开」。
+1. Import an English audio or video file.
+2. Put a matching `.srt` or `.vtt` subtitle beside it.
+3. Listen once without stopping and identify unclear sentences.
+4. Click an unclear sentence and turn on **Loop Sentence**.
+5. Follow the word highlighting, imitate the pronunciation, and repeat until the sentence sounds clear.
+6. Turn off the loop and continue listening in context.
 
-发布包使用 Ad-hoc 签名。如果 Gatekeeper 仍然阻止启动，可在终端执行：
+This workflow works well for intensive listening, shadowing preparation, pronunciation awareness, and IELTS or other English listening practice.
+
+## Features for Listening Practice
+
+### Interactive Subtitles
+
+- Focused current-sentence view or full transcript context
+- Word-by-word highlighting synchronized with playback
+- One-click jump to any subtitle sentence
+- Automatic transcript following, with easy recovery after manual scrolling
+- Stable sentence transitions that keep the completed line highlighted until the next line begins
+- Automatic cleanup of common subtitle markup
+- UTF-8, UTF-16, GB18030, and ISO-Latin1 subtitle support
+
+Standard subtitle files usually provide timing for each sentence rather than each word. DeepListen estimates word progress across the sentence duration to provide a useful visual listening guide.
+
+### Repetition Tools
+
+- **Loop Sentence** automatically uses the active subtitle's start and end times
+- Clicking another subtitle moves the sentence loop to that line
+- Manual A/B markers for phrases or passages that cross subtitle boundaries
+- Visible A/B range and timestamps
+- Single-track repeat and sequence playback modes
+
+### Playback Controls
+
+- Playback speed from 0.25x to 2.0x in 0.25x steps
+- Five-second rewind and forward controls
+- Precise timeline seeking and hover time preview
+- macOS media controls and Now Playing integration
+- Automatic restoration of the selected track and last playback position
+- Saved speed, playback mode, theme, and subtitle preferences
+
+### Local Media Library
+
+- Import individual files or entire folders
+- Recursive folder scanning with hidden-file filtering
+- Natural filename sorting and duplicate prevention
+- Search, drag-to-reorder, multi-selection removal, and Reveal in Finder
+- Supported formats: `mp3` `m4a` `aac` `wav` `aiff` `aif` `caf` `flac` `mp4` `m4v` `mov` `avi` `mkv`
+
+### Native macOS Experience
+
+- SwiftUI interface designed for macOS 26
+- Liquid Glass controls and nine theme colors
+- Adaptive layout for narrow and wide windows
+- Keyboard navigation and VoiceOver support
+
+## Install
+
+1. Download the DMG for your Mac, or choose the universal build, from [Releases](https://github.com/swiftczz/DeepListen/releases/latest).
+2. Open the DMG and drag `DeepListen.app` into Applications.
+3. On first launch, right-click the app and choose **Open**.
+
+Release builds use ad hoc signing. If Gatekeeper still blocks the app, run:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/DeepListen.app
 ```
 
-## 快速开始
+## Subtitle Matching
 
-1. 点击工具栏中的 `+`，或将媒体文件 / 文件夹拖入窗口。
-2. 如需字幕，把字幕与媒体放在同一目录并使用相同的主文件名。
-3. 选择曲目后开始播放，通过字幕、倍速和 A/B 循环进行精听。
-
-## 快捷键
-
-| 快捷键 | 功能 |
-| --- | --- |
-| `Space` | 播放 / 暂停 |
-| `←` | 后退 5 秒 |
-| `→` | 前进 5 秒 |
-| `⌘⇧←` | 上一首 |
-| `⌘⇧→` | 下一首 |
-| `⌘⌥←` | 后退 5 秒 |
-| `⌘⌥→` | 前进 5 秒 |
-| `⌘⌥A` | 设置 A 点 |
-| `⌘⌥B` | 设置 B 点 |
-| `⌘⌥Esc` | 清除 A/B 片段 |
-| `⌘⌥S` | 显示 / 隐藏字幕 |
-
-在搜索框或其他文本输入区域编辑时，无修饰键的播放快捷键不会触发。
-
-## 字幕匹配规则
-
-字幕文件必须与媒体文件位于同一目录，并使用相同的主文件名：
+Place the subtitle in the same directory as its media file and use the same base filename:
 
 ```text
-我的素材/
+English Practice/
 ├── Lesson 01.mp3
-├── Lesson 01.srt      ← 自动匹配
+├── Lesson 01.srt      ← automatically matched
 ├── Lesson 02.mp4
-└── Lesson 02.vtt      ← 自动匹配
+└── Lesson 02.vtt      ← automatically matched
 ```
 
-应用会在每次载入曲目时重新查找字幕，因此可以先导入媒体，再补充字幕文件。
+DeepListen checks for matching subtitles whenever a track loads, so you can import media first and add the subtitle later.
 
-## 从源码构建
+## Keyboard Shortcuts
 
-### 环境要求
+| Shortcut | Action |
+| --- | --- |
+| `Space` | Play / Pause |
+| `←` | Rewind 5 seconds |
+| `→` | Forward 5 seconds |
+| `⌘⇧←` | Previous track |
+| `⌘⇧→` | Next track |
+| `⌘⌥←` | Rewind 5 seconds |
+| `⌘⌥→` | Forward 5 seconds |
+| `⌘⌥A` | Set A point |
+| `⌘⌥B` | Set B point |
+| `⌘⌥Esc` | Clear A/B segment |
+| `⌘⌥S` | Show / hide subtitles |
 
-- macOS 26.0 或更高版本
-- Swift 6.3 工具链
+Unmodified playback shortcuts are disabled while editing the search field or another text input.
 
-### 编译与运行
+## Build from Source
 
-若需要生成 `.app`、注册 LaunchServices 并启动应用，可使用项目脚本：
+### Requirements
+
+- macOS 26.0 or later
+- Swift 6.3 toolchain
+
+### Build and Run
 
 ```bash
 ./script/build_and_run.sh
 ```
 
-其他开发模式：
+Additional development modes:
 
-| 命令 | 用途 |
+| Command | Purpose |
 | --- | --- |
-| `./script/build_and_run.sh --debug` | 构建并在 LLDB 中调试 |
-| `./script/build_and_run.sh --logs` | 启动并跟踪进程日志 |
-| `./script/build_and_run.sh --telemetry` | 启动并跟踪应用 subsystem 日志 |
-| `./script/build_and_run.sh --verify` | 启动并验证进程是否存活 |
+| `./script/build_and_run.sh --debug` | Build and debug with LLDB |
+| `./script/build_and_run.sh --logs` | Launch and stream process logs |
+| `./script/build_and_run.sh --telemetry` | Launch and stream app subsystem logs |
+| `./script/build_and_run.sh --verify` | Launch and verify that the process stays alive |
 
-### 打包 DMG
+### Build Release DMGs
 
 ```bash
-APP_VERSION=0.8.0 ./script/build_and_run.sh --build-only universal --sign --dmg
-APP_VERSION=0.8.0 ./script/build_and_run.sh --build-only arm64     --sign --dmg
-APP_VERSION=0.8.0 ./script/build_and_run.sh --build-only x86_64    --sign --dmg
+APP_VERSION=1.0.0 ./script/build_and_run.sh --build-only universal --sign --dmg
+APP_VERSION=1.0.0 ./script/build_and_run.sh --build-only arm64     --sign --dmg
+APP_VERSION=1.0.0 ./script/build_and_run.sh --build-only x86_64    --sign --dmg
 ```
 
-- `--build-only <arch>`：使用 release 配置构建 `universal`、`arm64` 或 `x86_64`
-- `--sign`：对 `.app` 进行 Ad-hoc 签名
-- `--dmg`：在 `dist/` 生成 `DeepListen-<arch>-<version>.dmg`
-- `APP_VERSION`：写入 `Info.plist` 和 DMG 文件名；未设置时依次使用最新 Git Tag 或 `0.0.0-dev`
+- `--build-only <arch>` builds `universal`, `arm64`, or `x86_64` in release configuration
+- `--sign` applies an ad hoc signature to the app
+- `--dmg` writes `DeepListen-<arch>-<version>.dmg` to `dist/`
+- `APP_VERSION` is written to `Info.plist` and the DMG filename; if omitted, the latest Git tag or `0.0.0-dev` is used
 
-## 技术栈
+## Tech Stack
 
-- **SwiftUI**：界面与交互
-- **AVFoundation**：媒体播放与时长解析
-- **MediaPlayer**：系统媒体控制与正在播放信息
-- **Observation**：`@Observable` 状态管理
-- **Swift Package Manager**：构建与依赖管理
+- **SwiftUI** — interface and interaction
+- **AVFoundation** — media playback and precise seeking
+- **MediaPlayer** — system media controls and Now Playing information
+- **Observation** — shared application state
+- **Swift Package Manager** — builds and dependency management
 
-## 项目结构
+## Project Structure
 
 ```text
 DeepListen/
-├── .github/workflows/
-│   └── release.yml          # Tag 触发的 DMG 发布流程
-├── docs/images/             # README 图片资源
-├── Resources/
-│   └── AppIcon.icns
-├── script/
-│   ├── build_and_run.sh     # 本地运行与打包
-│   └── generate_changelog.sh
+├── .github/workflows/      # release automation
+├── docs/images/            # README assets
+├── Resources/              # app icon
+├── script/                 # build, run, and packaging scripts
 ├── Sources/DeepListen/
-│   ├── App/                 # 应用入口与菜单命令
-│   ├── Models/              # 音轨、字幕、播放模式与主题
-│   ├── Services/            # 媒体发现、Finder 与系统媒体能力
-│   ├── Stores/              # 播放状态与媒体库
-│   ├── Support/             # 字幕解析与时间格式化
-│   └── Views/               # SwiftUI 视图
+│   ├── App/                # app entry point and commands
+│   ├── Models/             # tracks, subtitles, playback, and theme models
+│   ├── Services/           # playback, media discovery, and system integration
+│   ├── Stores/             # player state and media library
+│   ├── Support/            # subtitle parsing and time formatting
+│   └── Views/              # SwiftUI views
+├── README.md               # English documentation
+├── README_CN.md            # Simplified Chinese documentation
 └── Package.swift
 ```
 
-## 许可证
+## License
 
-本项目目前用于个人学习，尚未指定开源许可证。
+This project is currently intended for personal study and does not specify an open-source license.
