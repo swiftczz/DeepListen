@@ -7,6 +7,7 @@
 [![Release](https://img.shields.io/github/v/release/swiftczz/DeepListen?label=release)](https://github.com/swiftczz/DeepListen/releases/latest)
 ![Platform](https://img.shields.io/badge/macOS-26.0%2B-blue)
 ![Swift](https://img.shields.io/badge/Swift-6.3-orange)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 DeepListen 主要面向生活在非英语环境中的英语学习者。当日常英语输入有限时，电影、播客、访谈和课程都是很好的学习材料，但自然语速往往太快，普通播放器很难让人真正听清和反复练习。
 
@@ -200,4 +201,6 @@ DeepListen/
 
 ## 许可证
 
-本项目目前用于个人学习，尚未指定开源许可证。
+版权所有 © 2026 chengzhong。
+
+本项目采用 [Apache License 2.0](LICENSE) 许可证。

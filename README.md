@@ -7,6 +7,7 @@
 [![Release](https://img.shields.io/github/v/release/swiftczz/DeepListen?label=release)](https://github.com/swiftczz/DeepListen/releases/latest)
 ![Platform](https://img.shields.io/badge/macOS-26.0%2B-blue)
 ![Swift](https://img.shields.io/badge/Swift-6.3-orange)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 DeepListen is built for people learning English outside an English-speaking environment. When daily exposure is limited, movies, podcasts, interviews, and lessons are valuable—but natural speech is often too fast to study effectively with an ordinary media player.
 
@@ -200,4 +201,6 @@ DeepListen/
 
 ## License
 
-This project is currently intended for personal study and does not specify an open-source license.
+Copyright 2026 chengzhong.
+
+Licensed under the [Apache License 2.0](LICENSE).
