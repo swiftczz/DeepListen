@@ -38,7 +38,7 @@ Slow playback down to analyze pronunciation, return to normal speed to test comp
 ## A Simple Practice Routine
 
 1. Import an English audio or video file.
-2. Put a matching `.srt` or `.vtt` subtitle beside it.
+2. Put a matching `.srt`, `.vtt`, or `.lrc` subtitle beside it.
 3. Listen once without stopping and identify unclear sentences.
 4. Click an unclear sentence and turn on **Loop Sentence**.
 5. Follow the word highlighting, imitate the pronunciation, and repeat until the sentence sounds clear.
@@ -56,6 +56,7 @@ This workflow works well for intensive listening, shadowing preparation, pronunc
 - Automatic transcript following, with easy recovery after manual scrolling
 - Stable sentence transitions that keep the completed line highlighted until the next line begins
 - Automatic cleanup of common subtitle markup
+- `.srt`, `.vtt`, and `.lrc` subtitle matching, including bilingual LRC (`English | translation`)
 - UTF-8, UTF-16, GB18030, and ISO-Latin1 subtitle support
 
 Standard subtitle files usually provide timing for each sentence rather than each word. DeepListen estimates word progress across the sentence duration to provide a useful visual listening guide.
@@ -113,7 +114,9 @@ English Practice/
 ├── Lesson 01.mp3
 ├── Lesson 01.srt      ← automatically matched
 ├── Lesson 02.mp4
-└── Lesson 02.vtt      ← automatically matched
+├── Lesson 02.vtt      ← automatically matched
+├── Lesson 03.mp3
+└── Lesson 03.lrc      ← automatically matched
 ```
 
 DeepListen checks for matching subtitles whenever a track loads, so you can import media first and add the subtitle later.

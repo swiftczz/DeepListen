@@ -88,7 +88,7 @@ struct SubtitleView: View {
         switch player.subtitleLoadState {
         case .idle, .missing:
             subtitleStatus(
-                "未找到与当前媒体同名的 .srt 或 .vtt 字幕",
+                "未找到与当前媒体同名的 .srt、.vtt 或 .lrc 字幕",
                 systemImage: "captions.bubble"
             )
         case .loading:
@@ -136,9 +136,14 @@ struct SubtitleView: View {
                     cue: cue,
                     themeColor: theme.color
                 )
+            } else if let nextCue = player.nextSubtitle {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(nextCue.text)
+                    SubtitleTranslationText(nextCue.translation)
+                }
+                .foregroundStyle(.secondary)
             } else {
-                Text(player.nextSubtitle?.text ?? " ")
-                    .foregroundStyle(.secondary)
+                Text(" ")
             }
         }
         .font(.title.weight(.semibold))
@@ -179,6 +184,13 @@ private struct LyricsRow: View {
 
     @State private var isHovering = false
 
+    private var accessibilityLabel: String {
+        if let translation = cue.translation {
+            return "\(cue.start.formattedPlaybackTime)，\(cue.text)，\(translation)"
+        }
+        return "\(cue.start.formattedPlaybackTime)，\(cue.text)"
+    }
+
     var body: some View {
         Button(action: onTap) {
             Group {
@@ -188,8 +200,11 @@ private struct LyricsRow: View {
                         themeColor: theme.color
                     )
                 } else {
-                    Text(cue.text)
-                        .foregroundStyle(isHovering ? Color.primary : Color.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(cue.text)
+                            .foregroundStyle(isHovering ? Color.primary : Color.secondary)
+                        SubtitleTranslationText(cue.translation)
+                    }
                 }
             }
             .font(isCurrent ? .title.weight(.semibold) : .title3)
@@ -202,7 +217,7 @@ private struct LyricsRow: View {
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
         .help("跳转到 \(cue.start.formattedPlaybackTime)")
-        .accessibilityLabel("\(cue.start.formattedPlaybackTime)，\(cue.text)")
+        .accessibilityLabel(accessibilityLabel)
         .accessibilityValue(isCurrent ? "当前字幕" : "")
         .accessibilityHint("跳转到这一句")
     }
@@ -217,7 +232,10 @@ private struct KaraokeSubtitleText: View {
     var themeColor: Color
 
     var body: some View {
-        Text(styledText)
+        VStack(alignment: .leading, spacing: 8) {
+            Text(styledText)
+            SubtitleTranslationText(cue.translation)
+        }
     }
 
     private var styledText: AttributedString {
@@ -279,5 +297,24 @@ private struct KaraokeSubtitleText: View {
         }
 
         return tokens
+    }
+}
+
+/// 双语 LRC 的译文：比英文正文小一号，不参与逐词高亮。
+private struct SubtitleTranslationText: View {
+    var translation: String?
+
+    init(_ translation: String?) {
+        self.translation = translation
+    }
+
+    var body: some View {
+        if let translation, !translation.isEmpty {
+            Text(translation)
+                .font(.title3.weight(.regular))
+                .fontDesign(.default)
+                .foregroundStyle(.secondary)
+                .lineSpacing(4)
+        }
     }
 }

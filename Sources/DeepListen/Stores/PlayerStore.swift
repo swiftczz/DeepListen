@@ -557,7 +557,7 @@ import Observation
             return
         }
 
-        // 每次载入都重新匹配同名字幕：曲目导入后才补上的 .srt/.vtt 也能被发现，
+        // 每次载入都重新匹配同名字幕：曲目导入后才补上的 .srt/.vtt/.lrc 也能被发现，
         // 否则 subtitleURL 只在 init 时解析一次，必须重启才生效。
         let resolvedSubtitleURL = ListeningTrack.matchingSubtitleURL(for: tracks[index].url)
         if tracks[index].subtitleURL != resolvedSubtitleURL {
@@ -597,8 +597,9 @@ import Observation
         subtitleSession.beginLoading()
 
         let trackID = track.id
-        subtitleLoadTask = Task.detached { [subtitleURL, trackID] in
-            let cues = SubtitleParser.parse(url: subtitleURL)
+        let mediaDuration = track.duration ?? duration
+        subtitleLoadTask = Task.detached { [subtitleURL, trackID, mediaDuration] in
+            let cues = SubtitleParser.parse(url: subtitleURL, mediaDuration: mediaDuration)
             guard !Task.isCancelled else { return }
 
             await MainActor.run { [weak self] in

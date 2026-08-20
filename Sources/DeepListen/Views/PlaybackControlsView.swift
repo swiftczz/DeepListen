@@ -300,6 +300,7 @@ private struct ABTimelineSlider: View {
                 onEditingChanged: updateScrubbing
             )
             .tint(theme.color)
+            .focusable(false)
             .accessibilityLabel("播放进度")
             .accessibilityValue(progressAccessibilityValue)
 
