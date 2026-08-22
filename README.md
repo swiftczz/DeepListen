@@ -126,8 +126,8 @@ DeepListen checks for matching subtitles whenever a track loads, so you can impo
 | Shortcut | Action |
 | --- | --- |
 | `Space` | Play / Pause |
-| `←` | Rewind 5 seconds |
-| `→` | Forward 5 seconds |
+| `←` | Previous sentence |
+| `→` | Next sentence |
 | `⌘⇧←` | Previous track |
 | `⌘⇧→` | Next track |
 | `⌘⌥←` | Rewind 5 seconds |

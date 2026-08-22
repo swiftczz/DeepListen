@@ -48,6 +48,16 @@ private struct PlaybackCommands: Commands {
             }
             .disabled(!allowsCommands || player.selectedTrack == nil)
 
+            Button("上一句") {
+                player.jumpToPreviousSubtitle()
+            }
+            .disabled(!allowsCommands || player.selectedTrack == nil)
+
+            Button("下一句") {
+                player.jumpToNextSubtitle()
+            }
+            .disabled(!allowsCommands || player.selectedTrack == nil)
+
             Button("上一首") {
                 player.previousTrack()
             }

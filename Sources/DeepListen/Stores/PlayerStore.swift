@@ -367,6 +367,40 @@ import Observation
         }
     }
 
+    /// 上一句。进入当前句超过 1 秒时先回到本句开头，方便精听重听。
+    /// 没有字幕时退回 5 秒，避免方向键失效。
+    func jumpToPreviousSubtitle() {
+        guard !subtitleCues.isEmpty else {
+            skip(by: -5)
+            return
+        }
+
+        guard let displayedSubtitleIndex, let displayed = displayedSubtitle else {
+            if let first = subtitleCues.first {
+                jumpToSubtitle(first)
+            }
+            return
+        }
+
+        if displayedSubtitleIndex > subtitleCues.startIndex, currentTime - displayed.start <= 1 {
+            jumpToSubtitle(subtitleCues[displayedSubtitleIndex - 1])
+        } else {
+            jumpToSubtitle(displayed)
+        }
+    }
+
+    /// 下一句。没有字幕时前进 5 秒。
+    func jumpToNextSubtitle() {
+        guard !subtitleCues.isEmpty else {
+            skip(by: 5)
+            return
+        }
+
+        if let next = nextSubtitle {
+            jumpToSubtitle(next)
+        }
+    }
+
     /// 使用当前字幕的起止时间设置 A/B 循环。开启后点击其他字幕句时，
     /// `jumpToSubtitle(_:)` 会让循环范围跟随新句子。
     func setSubtitleLooping(_ enabled: Bool) {

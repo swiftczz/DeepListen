@@ -47,10 +47,12 @@ final class PlaybackKeyboardMonitor {
             player?.togglePlayPause()
             return nil
         case 123: // 左方向键
-            player?.skip(by: -5)
+            guard !event.isARepeat else { return nil }
+            player?.jumpToPreviousSubtitle()
             return nil
         case 124: // 右方向键
-            player?.skip(by: 5)
+            guard !event.isARepeat else { return nil }
+            player?.jumpToNextSubtitle()
             return nil
         default:
             return event
@@ -70,7 +72,7 @@ final class PlaybackKeyboardMonitor {
     }
 
     /// 搜索框等真正在输入时才让出方向键。
-    /// 字幕的可选中文本也是 NSTextView，但不是 field editor，不能因此禁用快进快退。
+    /// 字幕的可选中文本也是 NSTextView，但不是 field editor，不能因此禁用上一句/下一句。
     private func isEditingText(in window: NSWindow?) -> Bool {
         guard let responder = window?.firstResponder else { return false }
 

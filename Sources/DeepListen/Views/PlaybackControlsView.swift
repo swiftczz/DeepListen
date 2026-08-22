@@ -168,7 +168,7 @@ struct TransportBarView: View {
             ) {
                 player.skip(by: -5)
             }
-            .help("后退 5 秒（←）")
+            .help("后退 5 秒（⌘⌥←）")
 
             IconButton(
                 label: "前进 5 秒",
@@ -179,7 +179,7 @@ struct TransportBarView: View {
             ) {
                 player.skip(by: 5)
             }
-            .help("前进 5 秒（→）")
+            .help("前进 5 秒（⌘⌥→）")
         }
     }
 }
