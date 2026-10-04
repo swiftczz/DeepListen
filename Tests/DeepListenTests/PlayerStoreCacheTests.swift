@@ -27,7 +27,8 @@ struct PlayerStoreCacheTests {
         }
         let persistence = PlayerPersistence(defaults: defaults)
         persistence.saveLibrary(tracks: tracks, selectedTrackID: tracks[0].id)
-        let store = PlayerStore(persistence: persistence, mediaPreparer: preparer)
+        let store = PlayerStore(persistence: persistence, mediaPreparer: preparer,
+            playbackEngine: PlaybackEngine(isMuted: true))
         if action != "preparing" {
             for _ in 0..<100 where store.isPreparingMedia {
                 try await Task.sleep(for: .milliseconds(5))

@@ -8,13 +8,14 @@ struct ABLoopView: View {
             VStack(alignment: .leading, spacing: 14) {
                 ViewThatFits(in: .horizontal) {
                     HStack {
+                        FavoriteSaveButton()
                         loopStatus
                         Spacer()
                         loopButtons
                     }
 
                     VStack(alignment: .leading, spacing: 14) {
-                        loopStatus
+                        HStack { FavoriteSaveButton(); loopStatus }
                         loopButtons
                     }
                 }

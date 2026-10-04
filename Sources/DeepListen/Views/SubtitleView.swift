@@ -51,6 +51,7 @@ struct SubtitleControlsView: View {
 
 struct SubtitleView: View {
     @Environment(PlayerStore.self) private var player
+    @Environment(FavoritesStore.self) private var favorites
 
     /// 字幕滚动区可视高度（由父视图测量传入），用于单句模式的垂直居中。
     var availableHeight: CGFloat = 0
@@ -167,6 +168,13 @@ struct SubtitleView: View {
                 ) {
                     player.jumpToSubtitle(cue)
                 }
+                .contextMenu {
+                    if let candidate = player.favoriteCandidate(for: cue) {
+                        Button(favorites.saved(candidate) == nil ? "收藏这句" : "已收藏", systemImage: "star") {
+                            favorites.add(candidate)
+                        }.disabled(favorites.saved(candidate) != nil)
+                    }
+                }
                 .id(cue.id)
             }
         }
@@ -225,7 +233,7 @@ private struct LyricsRow: View {
 
 /// 普通 SRT 只有整句时间戳。这里将句内时间平均分配给每个单词，
 /// 让已经播放到的内容逐词变为主题色。
-private struct KaraokeSubtitleText: View {
+struct KaraokeSubtitleText: View {
     @Environment(PlayerStore.self) private var player
 
     var cue: SubtitleCue

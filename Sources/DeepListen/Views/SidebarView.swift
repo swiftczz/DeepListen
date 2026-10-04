@@ -282,9 +282,9 @@ private struct TrackRow: View {
 }
 
 /// 关闭 SwiftUI sidebar List 底层 NSTableView/NSOutlineView 的原生选中高亮
-/// （聚焦时的蓝色强调），让 `listRowBackground` 提供的灰色圆角胶囊成为唯一可见的选中样式。
+/// （聚焦时的蓝色强调），让 `listRowBackground` 提供的背景成为唯一可见的选中样式。
 /// 找不到宿主表格时静默降级（回到原生高亮），不会崩溃。
-private struct SelectionHighlightSuppressor: NSViewRepresentable {
+struct SelectionHighlightSuppressor: NSViewRepresentable {
     func makeNSView(context: Context) -> ProbeView {
         ProbeView()
     }

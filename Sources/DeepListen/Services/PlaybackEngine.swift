@@ -20,6 +20,8 @@ final class PlaybackEngine {
         player.currentItem != nil
     }
 
+    var isMuted: Bool { player.isMuted }
+
     var currentItemDuration: TimeInterval? {
         guard let seconds = player.currentItem?.duration.seconds,
             seconds.isFinite,
@@ -30,7 +32,8 @@ final class PlaybackEngine {
         return seconds
     }
 
-    init() {
+    init(isMuted: Bool = false) {
+        player.isMuted = isMuted
         player.automaticallyWaitsToMinimizeStalling = false
     }
 
@@ -76,10 +79,14 @@ final class PlaybackEngine {
         }
     }
 
-    func replaceCurrentItem(with url: URL?) {
+    func replaceCurrentItem(with url: URL?, endTime: TimeInterval? = nil) {
         seekGeneration &+= 1
         isSeekPending = false
         let item = url.map(AVPlayerItem.init(url:))
+        if let item, let endTime, endTime.isFinite, endTime > 0 {
+            // Let AVPlayer stop at the clip boundary without waiting for the UI's periodic tick.
+            item.forwardPlaybackEndTime = Self.preciseTime(for: endTime)
+        }
         player.replaceCurrentItem(with: item)
     }
 

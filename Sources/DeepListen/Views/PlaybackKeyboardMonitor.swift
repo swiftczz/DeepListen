@@ -6,6 +6,7 @@ import AppKit
 final class PlaybackKeyboardMonitor {
     var isEnabled = true
 
+    private weak var favorites: FavoritesStore?
     private weak var player: PlayerStore?
     private var eventMonitor: Any?
 
@@ -13,7 +14,8 @@ final class PlaybackKeyboardMonitor {
         stop()
     }
 
-    func start(player: PlayerStore) {
+    func start(player: PlayerStore, favorites: FavoritesStore) {
+        self.favorites = favorites
         self.player = player
         guard eventMonitor == nil else { return }
 
@@ -36,7 +38,8 @@ final class PlaybackKeyboardMonitor {
             isPlayerWindow(eventWindow),
             player?.selectedTrack != nil,
             event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty,
-            !isEditingText(in: eventWindow)
+            !isEditingText(in: eventWindow),
+            favorites?.workspace != .favorites || (favorites?.selectedID == player?.activeFavorite?.id && favorites?.isReviewComplete == false)
         else {
             return event
         }
@@ -48,11 +51,17 @@ final class PlaybackKeyboardMonitor {
             return nil
         case 123: // 左方向键
             guard !event.isARepeat else { return nil }
-            player?.jumpToPreviousSubtitle()
+            if let favorites, favorites.workspace == .favorites {
+                if favorites.isReviewing { favorites.repeatCurrent(); player?.replayFavorite() }
+                else { favorites.selectAdjacent(-1) }
+            } else { player?.jumpToPreviousSubtitle() }
             return nil
         case 124: // 右方向键
             guard !event.isARepeat else { return nil }
-            player?.jumpToNextSubtitle()
+            if let favorites, favorites.workspace == .favorites {
+                if favorites.isReviewing { favorites.advance(mastered: false) }
+                else { favorites.selectAdjacent(1) }
+            } else { player?.jumpToNextSubtitle() }
             return nil
         default:
             return event
@@ -72,12 +81,12 @@ final class PlaybackKeyboardMonitor {
     }
 
     /// 搜索框等真正在输入时才让出方向键。
-    /// 字幕的可选中文本也是 NSTextView，但不是 field editor，不能因此禁用上一句/下一句。
+    /// 字幕的可选中文本不可编辑；备注 TextEditor 可编辑，也必须让出快捷键。
     private func isEditingText(in window: NSWindow?) -> Bool {
         guard let responder = window?.firstResponder else { return false }
 
         if let textView = responder as? NSTextView {
-            return textView.isFieldEditor && textView.isEditable
+            return textView.isEditable
         }
 
         if let textField = responder as? NSTextField {

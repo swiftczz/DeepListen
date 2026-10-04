@@ -120,10 +120,11 @@ struct MediaPlaybackPreparerTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         let source = try fixture(in: directory)
         let output = try await MediaPlaybackPreparer(cacheDirectory: directory.appendingPathComponent("cache")).prepare(source)
-        let engine = PlaybackEngine()
+        let engine = PlaybackEngine(isMuted: true)
         var position: TimeInterval = 0
         engine.configure(handlers: .init(tick: { position = $0 }, finished: {}))
         engine.replaceCurrentItem(with: output)
+        #expect(engine.isMuted)
         engine.seek(to: 0.5)
         engine.play(rate: 0.5)
         try await Task.sleep(for: .seconds(1))

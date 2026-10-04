@@ -69,6 +69,16 @@ Standard subtitle files usually provide timing for each sentence rather than eac
 - Visible A/B range and timestamps
 - Single-track repeat and sequence playback modes
 
+### Saved Passages and Review
+
+- Save the current subtitle sentence or a manual A/B segment with one click (⌘D)
+- Browse all saved passages and search text, sources, or notes
+- Add notes, repeat the saved interval, and return to the original transcript
+- Listen before revealing the text, translation, and notes; mark a line as mastered or skip it for later
+- Favorites stay saved when media is removed from the library; missing files can be relinked
+- Review playback does not overwrite the media library's saved playback position
+- Switch to the library with ⌘1 and favorites with ⌘2; space plays/pauses, and arrow keys navigate favorites (during review, left replays and right skips)
+
 ### Playback Controls
 
 - Playback speed from 0.25x to 2.0x in 0.25x steps

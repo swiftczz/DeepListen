@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(PlayerStore.self) private var player
+    @Environment(FavoritesStore.self) private var favorites
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(AppThemeColor.storageKey) private var storedTheme = AppThemeColor.defaultTheme.rawValue
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
@@ -18,7 +19,6 @@ struct ContentView: View {
 
     private let detailMinimumWidth: CGFloat = 480
     private let sidebarMinimumWidth: CGFloat = 270
-    private let sidebarIdealWidth: CGFloat = 310
     private let sidebarMaximumWidth: CGFloat = 360
     private let sidebarAutoHideWidth: CGFloat = 800
     private let sidebarAutoShowWidth: CGFloat = 830
@@ -52,10 +52,11 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            SidebarView(theme: theme, searchFocus: $isSidebarSearchFocused)
+            WorkspaceSidebarView(theme: theme, searchFocus: $isSidebarSearchFocused)
+                .frame(minWidth: sidebarMinimumWidth)
                 .navigationSplitViewColumnWidth(
                     min: sidebarMinimumWidth,
-                    ideal: sidebarIdealWidth,
+                    ideal: sidebarWidth,
                     max: sidebarMaximumWidth
                 )
                 .onGeometryChange(for: CGFloat.self) { proxy in
@@ -65,8 +66,11 @@ struct ContentView: View {
                     sidebarWidth = width
                 }
         } detail: {
-            PlayerDetailView(theme: theme)
-                .frame(minWidth: detailMinimumWidth)
+            Group {
+                if favorites.workspace == .library { PlayerDetailView(theme: theme) }
+                else { FavoriteDetailView(theme: theme) }
+            }
+            .frame(minWidth: detailMinimumWidth)
         }
         .navigationSplitViewStyle(.prominentDetail)
         .navigationTitle("DeepListen")
@@ -87,6 +91,7 @@ struct ContentView: View {
         .tint(theme.color)
         .dropDestination(for: URL.self) { urls, _ in
             guard !urls.isEmpty else { return false }
+            favorites.workspace = .library
             player.openExternalURLs(urls)
             return true
         } isTargeted: { targeted in
@@ -105,7 +110,7 @@ struct ContentView: View {
         .animation(.easeOut(duration: 0.12), value: isDropTargeted)
         .onAppear {
             playbackKeyboardMonitor.isEnabled = !isSidebarSearchFocused
-            playbackKeyboardMonitor.start(player: player)
+            playbackKeyboardMonitor.start(player: player, favorites: favorites)
         }
         .onDisappear {
             playbackKeyboardMonitor.stop()
@@ -118,6 +123,18 @@ struct ContentView: View {
         .onChange(of: isSidebarSearchFocused) { _, isFocused in
             playbackKeyboardMonitor.isEnabled = !isFocused
         }
+        .onChange(of: favorites.workspace) { _, workspace in
+            if workspace == .library { favorites.stopReview(); player.leaveFavoritePlayback() }
+            else {
+                if favorites.selectedID == nil { favorites.selectedID = favorites.visiblePassages.first?.id }
+                loadSelectedFavorite()
+            }
+        }
+        .onChange(of: favorites.selectedID) { loadSelectedFavorite() }
+        .onChange(of: favorites.isReviewing) { _, reviewing in
+            if reviewing { loadSelectedFavorite() }
+        }
+        .onChange(of: favorites.isReviewComplete) { _, complete in if complete { player.pause() } }
         .focusedSceneValue(\.playbackCommandsEnabled, !isSidebarSearchFocused)
         .task(id: requestedWindowSize) {
             guard let requestedWindowSize else { return }
@@ -143,6 +160,13 @@ struct ContentView: View {
             }
         }
         .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Menu {
+                    Button("媒体库") { favorites.workspace = .library }
+                    Button("收藏") { favorites.workspace = .favorites }
+                } label: { Label(favorites.workspace.title, systemImage: favorites.workspace.symbol) }
+                .help("切换媒体库与收藏")
+            }
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
                     showsMediaImporter = true
@@ -175,6 +199,7 @@ struct ContentView: View {
         ) { result in
             switch result {
             case let .success(urls):
+                favorites.workspace = .library
                 player.openExternalURLs(urls)
             case let .failure(error):
                 player.reportImportFailure(error)
@@ -196,6 +221,12 @@ struct ContentView: View {
             }
         }
         .animation(.easeOut(duration: 0.18), value: player.libraryNotice)
+    }
+
+    private func loadSelectedFavorite() {
+        guard favorites.workspace == .favorites else { return }
+        if let passage = favorites.selected { player.loadFavorite(passage, autoplay: favorites.isReviewing) }
+        else { player.pause() }
     }
 
     private func updateColumnVisibility(for width: CGFloat) {

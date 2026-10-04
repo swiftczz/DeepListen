@@ -5,6 +5,8 @@ import Observation
 @Observable final class PlayerStore {
     private(set) var tracks: [ListeningTrack] = []
     var selectedTrackID: ListeningTrack.ID?
+    private(set) var activeFavorite: SavedPassage?
+    private var favoriteTrack: ListeningTrack?
     private(set) var isPlaying = false
     private(set) var isPreparingMedia = false
     private(set) var mediaPreparationError: String?
@@ -33,7 +35,7 @@ import Observation
     private(set) var isSubtitleLooping = false
     private(set) var playbackFeedback: PlaybackFeedback?
 
-    @ObservationIgnored private let playbackEngine = PlaybackEngine()
+    @ObservationIgnored private let playbackEngine: PlaybackEngine
     @ObservationIgnored private let subtitleSession = SubtitleSession()
     @ObservationIgnored private let persistence: PlayerPersistence
     @ObservationIgnored private let fileRevealer: FileRevealing
@@ -53,8 +55,10 @@ import Observation
 
     init(fileRevealer: FileRevealing = MacFileRevealer(),
         persistence: PlayerPersistence = PlayerPersistence(),
-        mediaPreparer: MediaPlaybackPreparer = MediaPlaybackPreparer()
+        mediaPreparer: MediaPlaybackPreparer = MediaPlaybackPreparer(),
+        playbackEngine: PlaybackEngine = PlaybackEngine()
     ) {
+        self.playbackEngine = playbackEngine
         self.persistence = persistence
         self.fileRevealer = fileRevealer
         self.mediaPreparer = mediaPreparer
@@ -88,6 +92,7 @@ import Observation
     }
 
     var selectedTrack: ListeningTrack? {
+        if let favoriteTrack { return favoriteTrack }
         guard let selectedTrackIndex else { return nil }
         return tracks[selectedTrackIndex]
     }
@@ -162,6 +167,84 @@ import Observation
         set {
             setPlaybackRate(newValue)
         }
+    }
+
+    var favoriteCandidate: SavedPassage? {
+        guard let track = selectedTrack, activeFavorite == nil else { return nil }
+        if !isSubtitleLooping, let start = loopStart, let end = loopEnd, end > start {
+            let cues = subtitleCues.filter { $0.end > start && $0.start < end }
+            return SavedPassage(sourcePath: track.url.standardizedFileURL.resolvingSymlinksInPath().path,
+                sourceTitle: track.title, start: start, end: end,
+                text: cues.map(\.text).joined(separator: "\n"),
+                translation: cues.compactMap(\.translation).joined(separator: "\n"), isClip: true)
+        }
+        return subtitleForSentenceLoop.flatMap { favoriteCandidate(for: $0) }
+    }
+
+    func favoriteCandidate(for cue: SubtitleCue) -> SavedPassage? {
+        guard let track = selectedTrack, cue.end > cue.start else { return nil }
+        return SavedPassage(sourcePath: track.url.standardizedFileURL.resolvingSymlinksInPath().path,
+            sourceTitle: track.title, start: cue.start, end: cue.end,
+            text: cue.text, translation: cue.translation)
+    }
+
+    /// Favorite playback is independent of library selection and its saved position.
+    func loadFavorite(_ passage: SavedPassage, autoplay: Bool = false) {
+        guard passage.isValid else { return }
+        savePlaybackPosition()
+        activeFavorite = passage
+        favoriteTrack = ListeningTrack(url: passage.sourceURL, id: passage.id)
+        guard passage.sourceExists else {
+            cancelMediaPreparation()
+            subtitleLoadTask?.cancel()
+            subtitleLoadTask = nil
+            playbackEngine.pause()
+            playbackEngine.replaceCurrentItem(with: nil)
+            isPlaying = false
+            currentTime = passage.start
+            duration = 0
+            clearLoop()
+            subtitleSession.reset()
+            nowPlayingController.clear()
+            return
+        }
+        loadCurrentTrack(autoplay: autoplay)
+    }
+
+    func leaveFavoritePlayback() {
+        guard activeFavorite != nil else { return }
+        activeFavorite = nil
+        favoriteTrack = nil
+        loadCurrentTrack(autoplay: false)
+    }
+
+    func replayFavorite() {
+        guard let favorite = activeFavorite else { return }
+        seek(to: favorite.start)
+        play()
+    }
+
+    func setFavoriteLooping(_ enabled: Bool) {
+        guard let favorite = activeFavorite else { return }
+        if enabled { loopStart = favorite.start; loopEnd = favorite.end }
+        else { clearLoop() }
+    }
+
+    func returnToSource(_ passage: SavedPassage) {
+        guard passage.sourceExists else { return }
+        leaveFavoritePlayback()
+        let path = passage.sourceURL.standardizedFileURL.resolvingSymlinksInPath().path
+        if let track = tracks.first(where: { $0.url.standardizedFileURL.resolvingSymlinksInPath().path == path }) {
+            selectTrack(track.id, autoplay: false)
+        } else {
+            let track = ListeningTrack(url: passage.sourceURL)
+            tracks.append(track)
+            selectTrack(track.id, autoplay: false)
+        }
+        clearLoop()
+        showSubtitles = true
+        showSubtitleContext = true
+        seek(to: passage.start)
     }
 
     func openExternalURLs(_ urls: [URL]) {
@@ -259,6 +342,15 @@ import Observation
     func selectTrack(_ id: ListeningTrack.ID, autoplay: Bool) {
         guard tracks.contains(where: { $0.id == id }) else { return }
 
+        if activeFavorite != nil {
+            activeFavorite = nil
+            favoriteTrack = nil
+            selectedTrackID = id
+            loadCurrentTrack(autoplay: autoplay)
+            persistLibrary()
+            return
+        }
+
         if selectedTrackID == id {
             if autoplay {
                 play()
@@ -287,6 +379,14 @@ import Observation
     }
 
     func play() {
+        guard mediaPreparationError == nil else { return }
+        if let favorite = activeFavorite, !favorite.sourceExists {
+            playbackEngine.pause()
+            playbackEngine.replaceCurrentItem(with: nil)
+            isPlaying = false
+            mediaPreparationError = "找不到原媒体文件，请重新关联文件。"
+            return
+        }
         if isPreparingMedia {
             // Record the user's intent; pause can withdraw it before preparation completes.
             isPlaying = true
@@ -308,7 +408,9 @@ import Observation
 
         guard playbackEngine.hasCurrentItem else { return }
 
-        if duration > 0, currentTime >= duration {
+        if let favorite = activeFavorite, currentTime >= favorite.end {
+            seek(to: favorite.start)
+        } else if duration > 0, currentTime >= duration {
             seek(to: 0)
         }
 
@@ -328,12 +430,14 @@ import Observation
     /// 这与顺序播放放完最后一首后停止（见 handlePlaybackFinished）是有意区分的：
     /// 自动连播不应无限循环整个列表。
     func nextTrack() {
+        guard activeFavorite == nil else { return }
         guard !tracks.isEmpty else { return }
         let nextIndex = ((selectedIndex ?? -1) + 1) % tracks.count
         selectTrack(tracks[nextIndex].id, autoplay: isPlaying)
     }
 
     func previousTrack() {
+        guard activeFavorite == nil else { return }
         guard !tracks.isEmpty else { return }
         let currentIndex = selectedIndex ?? 0
         let previousIndex = (currentIndex - 1 + tracks.count) % tracks.count
@@ -352,9 +456,10 @@ import Observation
         let clampedSeconds = duration > 0
             ? min(max(seconds, 0), duration)
             : max(seconds, 0)
-        currentTime = clampedSeconds
-        subtitleSession.updatePosition(at: clampedSeconds)
-        playbackEngine.seek(to: clampedSeconds)
+        let target = activeFavorite.map { min(max(clampedSeconds, $0.start), $0.end) } ?? clampedSeconds
+        currentTime = target
+        subtitleSession.updatePosition(at: target)
+        playbackEngine.seek(to: target)
         if savesPlaybackPosition {
             schedulePlaybackPositionSave()
         }
@@ -365,7 +470,7 @@ import Observation
     func savePlaybackPosition() {
         playbackPositionSaveTask?.cancel()
         playbackPositionSaveTask = nil
-        guard let selectedTrackID else { return }
+        guard activeFavorite == nil, let selectedTrackID else { return }
         persistence.savePlaybackPosition(currentTime, for: selectedTrackID)
     }
 
@@ -391,6 +496,7 @@ import Observation
     /// 上一句。进入当前句超过 1 秒时先回到本句开头，方便精听重听。
     /// 没有字幕时退回 5 秒，避免方向键失效。
     func jumpToPreviousSubtitle() {
+        if let favorite = activeFavorite { seek(to: favorite.start); return }
         guard !subtitleCues.isEmpty else {
             skip(by: -5)
             return
@@ -412,6 +518,7 @@ import Observation
 
     /// 下一句。没有字幕时前进 5 秒。
     func jumpToNextSubtitle() {
+        if let favorite = activeFavorite { seek(to: favorite.end); pause(); return }
         guard !subtitleCues.isEmpty else {
             skip(by: 5)
             return
@@ -491,12 +598,15 @@ import Observation
         tracks.remove(at: index)
 
         if removedSelectedTrack {
-            pause()
-            playbackEngine.replaceCurrentItem(with: nil)
+            if activeFavorite == nil {
+                pause()
+                playbackEngine.replaceCurrentItem(with: nil)
+            }
             selectedTrackID = tracks.indices.contains(index) ? tracks[index].id : tracks.first?.id
-            loadCurrentTrack(autoplay: false)
+            if activeFavorite == nil { loadCurrentTrack(autoplay: false) }
         }
 
+        stopFavoritePlaybackIfRemovingSource([removedURL])
         removeCachedAudio(for: [removedURL])
         persistLibrary()
     }
@@ -512,12 +622,15 @@ import Observation
         tracks.removeAll { ids.contains($0.id) }
 
         if removedSelectedTrack {
-            pause()
-            playbackEngine.replaceCurrentItem(with: nil)
+            if activeFavorite == nil {
+                pause()
+                playbackEngine.replaceCurrentItem(with: nil)
+            }
             selectedTrackID = tracks.first?.id
-            loadCurrentTrack(autoplay: false)
+            if activeFavorite == nil { loadCurrentTrack(autoplay: false) }
         }
 
+        stopFavoritePlaybackIfRemovingSource(removedURLs)
         removeCachedAudio(for: removedURLs)
         persistLibrary()
     }
@@ -533,6 +646,8 @@ import Observation
         pause()
         playbackEngine.replaceCurrentItem(with: nil)
         tracks.removeAll()
+        activeFavorite = nil
+        favoriteTrack = nil
         selectedTrackID = nil
         subtitleSession.reset()
         currentTime = 0
@@ -541,6 +656,15 @@ import Observation
         do { try mediaPreparer.removeAllCachedAudio() }
         catch { reportCacheCleanupFailure(error) }
         persistLibrary()
+    }
+
+    private func stopFavoritePlaybackIfRemovingSource(_ urls: [URL]) {
+        guard let favorite = activeFavorite, urls.contains(where: {
+            $0.standardizedFileURL.resolvingSymlinksInPath().path == favorite.sourcePath
+        }) else { return }
+        cancelMediaPreparation()
+        pause()
+        playbackEngine.replaceCurrentItem(with: nil)
     }
 
     private func removeCachedAudio(for urls: [URL]) {
@@ -616,7 +740,7 @@ import Observation
 
     private func loadCurrentTrack(autoplay: Bool) {
         cancelMediaPreparation()
-        guard let index = selectedTrackIndex else {
+        guard var selectedTrack = selectedTrack else {
             playbackEngine.pause()
             isPlaying = false
             playbackEngine.replaceCurrentItem(with: nil)
@@ -630,22 +754,24 @@ import Observation
 
         // 每次载入都重新匹配同名字幕：曲目导入后才补上的 .srt/.vtt/.lrc 也能被发现，
         // 否则 subtitleURL 只在 init 时解析一次，必须重启才生效。
-        let resolvedSubtitleURL = ListeningTrack.matchingSubtitleURL(for: tracks[index].url)
-        if tracks[index].subtitleURL != resolvedSubtitleURL {
-            tracks[index].subtitleURL = resolvedSubtitleURL
+        selectedTrack.subtitleURL = ListeningTrack.matchingSubtitleURL(for: selectedTrack.url)
+        if activeFavorite == nil, let index = selectedTrackIndex {
+            tracks[index].subtitleURL = selectedTrack.subtitleURL
+        } else {
+            favoriteTrack = selectedTrack
         }
-        let selectedTrack = tracks[index]
 
         // 必须先暂停：replaceCurrentItem 不会停下正在播放的 AVPlayer，
         // 新曲目会带着原速率直接开播，而 isPlaying 已被置 false，声音与按钮状态脱节。
         playbackEngine.pause()
         let needsPreparation = MediaPlaybackPreparer.needsPreparation(selectedTrack.url)
-        playbackEngine.replaceCurrentItem(with: needsPreparation ? nil : selectedTrack.url)
+        playbackEngine.replaceCurrentItem(with: needsPreparation ? nil : selectedTrack.url, endTime: activeFavorite?.end)
         isPlaying = false
         duration = selectedTrack.duration ?? 0
-        currentTime = restoredPlaybackPosition(for: selectedTrack)
+        currentTime = activeFavorite?.start ?? restoredPlaybackPosition(for: selectedTrack)
         playbackEngine.seek(to: currentTime)
         clearLoop()
+        if let favorite = activeFavorite { loopStart = favorite.start; loopEnd = favorite.end }
         loadSubtitles(for: selectedTrack)
 
         refreshDurations(for: [selectedTrack])
@@ -679,7 +805,7 @@ import Observation
             do {
                 let playbackURL = try await preparer.prepare(track.url)
                 guard !Task.isCancelled, let self,
-                    mediaPreparationGeneration == generation, selectedTrackID == track.id
+                    mediaPreparationGeneration == generation, selectedTrack?.id == track.id
                 else { return }
                 let loadedDuration = await MediaDurationLoader.loadDuration(for: playbackURL)
                 guard !Task.isCancelled, mediaPreparationGeneration == generation else { return }
@@ -689,14 +815,18 @@ import Observation
                 }
                 mediaPreparationTask = nil
                 isPreparingMedia = false
-                playbackEngine.replaceCurrentItem(with: playbackURL)
+                guard mediaPreparationError == nil else {
+                    updateNowPlaying()
+                    return
+                }
+                playbackEngine.replaceCurrentItem(with: playbackURL, endTime: activeFavorite?.end)
                 // Use the latest position/rate/play intent, including changes made while preparing.
                 playbackEngine.seek(to: currentTime)
                 if isPlaying { playbackEngine.play(rate: playbackRate) }
                 updateNowPlaying()
             } catch {
                 guard !Task.isCancelled, let self,
-                    mediaPreparationGeneration == generation, selectedTrackID == track.id
+                    mediaPreparationGeneration == generation, selectedTrack?.id == track.id
                 else { return }
                 mediaPreparationTask = nil
                 isPreparingMedia = false
@@ -724,7 +854,7 @@ import Observation
             guard !Task.isCancelled else { return }
 
             await MainActor.run { [weak self] in
-                guard let self, selectedTrackID == trackID else { return }
+                guard let self, selectedTrack?.id == trackID else { return }
                 subtitleSession.apply(cues, at: currentTime)
                 subtitleLoadTask = nil
             }
@@ -742,6 +872,12 @@ import Observation
             duration = itemDuration
         }
 
+        if let favorite = activeFavorite, seconds >= favorite.end,
+            loopStart == nil || loopEnd == nil {
+            pause()
+            seek(to: favorite.end, savesPlaybackPosition: false)
+            return
+        }
         currentTime = seconds
         subtitleSession.updatePosition(at: seconds)
 
@@ -757,6 +893,12 @@ import Observation
         if let loopStart, let loopEnd, loopEnd > loopStart {
             seek(to: loopStart, savesPlaybackPosition: false)
             play()
+            return
+        }
+
+        if let favorite = activeFavorite {
+            pause()
+            seek(to: favorite.end, savesPlaybackPosition: false)
             return
         }
 
@@ -805,12 +947,12 @@ import Observation
 
     private func schedulePlaybackPositionSave() {
         playbackPositionSaveTask?.cancel()
-        guard let trackID = selectedTrackID else { return }
+        guard activeFavorite == nil, let trackID = selectedTrackID else { return }
         let position = currentTime
 
         playbackPositionSaveTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(500))
-            guard !Task.isCancelled, let self, selectedTrackID == trackID else { return }
+            guard !Task.isCancelled, let self, activeFavorite == nil, selectedTrackID == trackID else { return }
             persistence.savePlaybackPosition(position, for: trackID)
             playbackPositionSaveTask = nil
         }
@@ -864,16 +1006,26 @@ import Observation
     }
 
     private func applyDuration(_ loadedDuration: TimeInterval?, to id: ListeningTrack.ID) {
-        guard let loadedDuration, let index = tracks.firstIndex(where: { $0.id == id }) else {
-            return
+        guard let loadedDuration else { return }
+        if favoriteTrack?.id == id {
+            favoriteTrack?.duration = loadedDuration
+            duration = loadedDuration
+            if let favorite = activeFavorite,
+                favorite.start >= loadedDuration || favorite.end > loadedDuration + 0.1 {
+                playbackEngine.pause()
+                playbackEngine.replaceCurrentItem(with: nil)
+                isPlaying = false
+                mediaPreparationError = "收藏片段超出当前文件时长，请重新关联原媒体文件或检查字幕时间。"
+            }
         }
+        guard let index = tracks.firstIndex(where: { $0.id == id }) else { return }
 
         // 同 handlePlaybackTick：@Observable 的写入不做相等性去重，
         // 写入同值会白白让整个曲目列表失效。
         if tracks[index].duration != loadedDuration {
             tracks[index].duration = loadedDuration
         }
-        if selectedTrackID == id, duration != loadedDuration {
+        if activeFavorite == nil, selectedTrackID == id, duration != loadedDuration {
             duration = loadedDuration
         }
     }

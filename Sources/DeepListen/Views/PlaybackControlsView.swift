@@ -2,7 +2,6 @@ import SwiftUI
 
 struct TransportBarView: View {
     @Environment(PlayerStore.self) private var player
-    @State private var showsSpeedPopover = false
     @State private var backwardBounce = 0
     @State private var forwardBounce = 0
     @State private var modeBounce = 0
@@ -13,26 +12,6 @@ struct TransportBarView: View {
         guard player.duration.isFinite, player.duration >= 1 else { return "--:-- / --:--" }
         let elapsed = min(max(player.currentTime, 0), player.duration)
         return "\(elapsed.formattedPlaybackTime) / \(player.duration.formattedPlaybackTime)"
-    }
-
-    /// 倍速按钮面显示值：整数 "1×"、半档 "1.5×"、四分档 "1.25×"。
-    private var speedLabel: String {
-        let rate = player.playbackRate
-        let number: String
-        if rate == rate.rounded() {
-            number = String(format: "%.0f", rate)
-        } else if (rate * 10).rounded() == rate * 10 {
-            number = String(format: "%.1f", rate)
-        } else {
-            number = String(format: "%.2f", rate)
-        }
-        return number + "×"
-    }
-
-    private var playbackRateFeedback: PlaybackFeedback? {
-        guard let feedback = player.playbackFeedback,
-              case .playbackRate = feedback.kind else { return nil }
-        return feedback
     }
 
     var body: some View {
@@ -105,10 +84,8 @@ struct TransportBarView: View {
     }
 
     private var playbackOptions: some View {
-        @Bindable var player = player
-
-        return HStack(spacing: 14) {
-            IconButton(
+        HStack(spacing: 14) {
+            PlaybackIconButton(
                 label: "播放模式：\(player.playbackMode.title)",
                 systemImage: player.playbackMode.systemImage,
                 theme: theme,
@@ -120,36 +97,13 @@ struct TransportBarView: View {
             }
             .help("播放模式：\(player.playbackMode.title)")
 
-            GlassButton(
-                accessibilityLabel: "倍速",
-                theme: theme,
-                isProminent: false,
-                action: { showsSpeedPopover.toggle() }
-            ) {
-                Text(speedLabel)
-                    .font(.system(size: 14, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(player.playbackRate == 1 ? Color.primary : theme.color)
-                    .contentTransition(.numericText())
-                    .animation(.snappy, value: player.playbackRate)
-                    .minimumScaleFactor(0.7)
-                    .lineLimit(1)
-            }
-            .help(String(format: "倍速 %.2fx", player.playbackRate))
-            .accessibilityValue(String(format: "%.2f 倍", player.playbackRate))
-            .playbackFeedbackOverlay(playbackRateFeedback, theme: theme)
-            .popover(isPresented: $showsSpeedPopover, arrowEdge: .bottom) {
-                SpeedPopover(
-                    rateBinding: $player.playbackRateSelection,
-                    rate: player.playbackRate,
-                    theme: theme
-                )
-            }
+            PlaybackSpeedButton(theme: theme)
         }
     }
 
     private var transportButtons: some View {
         HStack(spacing: 10) {
-            IconButton(
+            PlaybackIconButton(
                 label: player.isPlaying ? "暂停" : "播放",
                 systemImage: player.isPlaying ? "pause.fill" : "play.fill",
                 theme: theme,
@@ -159,7 +113,7 @@ struct TransportBarView: View {
             }
             .help(player.isPlaying ? "暂停（空格）" : "播放（空格）")
 
-            IconButton(
+            PlaybackIconButton(
                 label: "后退 5 秒",
                 systemImage: "gobackward.5",
                 theme: theme,
@@ -170,7 +124,7 @@ struct TransportBarView: View {
             }
             .help("后退 5 秒（⌘⌥←）")
 
-            IconButton(
+            PlaybackIconButton(
                 label: "前进 5 秒",
                 systemImage: "goforward.5",
                 theme: theme,
@@ -180,6 +134,52 @@ struct TransportBarView: View {
                 player.skip(by: 5)
             }
             .help("前进 5 秒（⌘⌥→）")
+        }
+    }
+}
+
+/// 媒体库和收藏共用同一套倍速按钮、滑杆弹窗及反馈。
+struct PlaybackSpeedButton: View {
+    @Environment(PlayerStore.self) private var player
+    @State private var showsPopover = false
+    var theme: AppThemeColor
+
+    private var speedLabel: String {
+        player.playbackRate.formatted(.number.precision(.fractionLength(0...2))) + "×"
+    }
+
+    private var feedback: PlaybackFeedback? {
+        guard let feedback = player.playbackFeedback,
+              case .playbackRate = feedback.kind else { return nil }
+        return feedback
+    }
+
+    var body: some View {
+        @Bindable var player = player
+
+        GlassButton(
+            accessibilityLabel: "倍速",
+            theme: theme,
+            isProminent: false,
+            action: { showsPopover.toggle() }
+        ) {
+            Text(speedLabel)
+                .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                .foregroundStyle(player.playbackRate == 1 ? Color.primary : theme.color)
+                .contentTransition(.numericText())
+                .animation(.snappy, value: player.playbackRate)
+                .minimumScaleFactor(0.7)
+                .lineLimit(1)
+        }
+        .help(String(format: "倍速 %.2fx", player.playbackRate))
+        .accessibilityValue(String(format: "%.2f 倍", player.playbackRate))
+        .playbackFeedbackOverlay(feedback, theme: theme)
+        .popover(isPresented: $showsPopover, arrowEdge: .bottom) {
+            SpeedPopover(
+                rateBinding: $player.playbackRateSelection,
+                rate: player.playbackRate,
+                theme: theme
+            )
         }
     }
 }
@@ -448,8 +448,8 @@ private struct GlassButton<Content: View>: View {
         Button(action: action) {
             content
                 .foregroundStyle(foregroundColor)
-                .frame(width: 46, height: 46)
-                .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .frame(width: 40, height: 40)
+                .contentShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                 .glassEffect(
                     isProminent
                         ? .regular.tint(theme.color).interactive()
@@ -469,7 +469,7 @@ private struct GlassButton<Content: View>: View {
     }
 }
 
-private struct IconButton: View {
+struct PlaybackIconButton: View {
     var label: String
     var systemImage: String
     var theme: AppThemeColor
