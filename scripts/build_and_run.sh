@@ -116,8 +116,7 @@ sign_app_adhoc() {
 }
 
 create_dmg() {
-  local arch="$1"
-  local dmg_path="$DIST_DIR/${APP_NAME}-${arch}-${APP_VERSION}.dmg"
+  local dmg_path="$DIST_DIR/${APP_NAME}-arm64-${APP_VERSION}.dmg"
   rm -f "$dmg_path"
 
   # 临时目录：包含 app + Applications 符号链接，支持拖拽安装
@@ -140,10 +139,8 @@ create_dmg() {
 }
 
 build_only() {
-  local arch="${1:-universal}"
   local do_sign=0
   local do_dmg=0
-  shift || true
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -154,15 +151,9 @@ build_only() {
     shift
   done
 
-  local build_args=(-c release)
-  case "$arch" in
-    universal) build_args+=(--arch arm64 --arch x86_64) ;;
-    arm64)     build_args+=(--arch arm64) ;;
-    x86_64)    build_args+=(--arch x86_64) ;;
-    *) echo "unknown arch: $arch (expected universal|arm64|x86_64)" >&2; exit 2 ;;
-  esac
+  local build_args=(-c release --arch arm64)
 
-  echo "==> Building $arch (version $APP_VERSION)"
+  echo "==> Building arm64 (version $APP_VERSION)"
   swift build --product "$APP_NAME" "${build_args[@]}"
   local build_binary
   build_binary="$(swift build --show-bin-path "${build_args[@]}")/$APP_NAME"
@@ -176,7 +167,7 @@ build_only() {
 
   if [[ $do_dmg -eq 1 ]]; then
     echo "==> Creating DMG"
-    create_dmg "$arch"
+    create_dmg
   fi
 
   echo "==> Done: $APP_BUNDLE"
@@ -196,9 +187,9 @@ open_app() {
 
 # Local development modes (build debug + launch GUI)
 build_and_launch_debug() {
-  swift build --product "$APP_NAME"
+  swift build --product "$APP_NAME" --arch arm64
   local build_binary
-  build_binary="$(swift build --show-bin-path)/$APP_NAME"
+  build_binary="$(swift build --show-bin-path --arch arm64)/$APP_NAME"
   package_app_from_binary "$build_binary"
 }
 
@@ -233,7 +224,7 @@ case "$MODE" in
     pgrep -x "$APP_NAME" >/dev/null
     ;;
   *)
-    echo "usage: $0 [run|--build-only <arch> [--sign] [--dmg]|--debug|--logs|--telemetry|--verify]" >&2
+    echo "usage: $0 [run|--build-only [--sign] [--dmg]|--debug|--logs|--telemetry|--verify]" >&2
     exit 2
     ;;
 esac

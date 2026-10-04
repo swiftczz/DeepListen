@@ -75,7 +75,7 @@ DeepListen 可以把本地音频、视频和字幕变成一个专注的精听工
 - 前进和后退 5 秒
 - 精确拖动进度条并悬停预览时间
 - 支持 macOS 系统媒体控制和“正在播放”信息
-- 自动恢复上次选择的媒体和播放位置
+- 为每个媒体文件独立记忆播放位置，切换回来或重新启动 App 后自动恢复
 - 自动保存倍速、播放模式、主题色和字幕偏好
 
 ### 本地媒体库
@@ -86,6 +86,14 @@ DeepListen 可以把本地音频、视频和字幕变成一个专注的精听工
 - 支持搜索、拖拽排序、多选删除和“在访达中显示”
 - 支持格式：`mp3` `m4a` `aac` `wav` `aiff` `aif` `caf` `flac` `mp4` `m4v` `mov` `avi` `mkv`
 
+MKV 音轨播放由 Swift 实现的 Matroska 解析器与 macOS 原生音频框架完成，无需安装 FFmpeg。支持第一条启用音轨使用 AAC-LC、MP3 或 PCM 的文件：连续的 AAC-LC 音频帧原样封装，MP3、PCM 及带起始延迟或中途空白的音轨由系统转换为 AAC，以保留原时间轴。首次打开时，DeepListen 会在后台准备可播放的 M4A 并缓存在用户缓存目录；之后复用缓存，原文件修改后会重新准备。此功能用于播放音频，字幕仍匹配原 MKV 旁的同名 `.srt`、`.vtt` 或 `.lrc` 文件。
+
+暂不支持 DTS、AC-3、Opus、Vorbis、HE-AAC，以及加密或带额外压缩的 MKV 音轨；遇到这些编码时会显示明确提示。
+
+从列表移除文件时，会同时删除该文件生成的音频缓存；批量移除会清理所有被移除文件的缓存，清空列表会清理全部生成的音频缓存。原始媒体和字幕文件保留，再次导入已移除的 MKV 时会重新准备音轨。
+
+其他格式通过 AVFoundation 播放，实际兼容性取决于文件中的音频编码。
+
 ### 原生 macOS 体验
 
 - 面向 macOS 26 设计的 SwiftUI 界面
@@ -95,7 +103,7 @@ DeepListen 可以把本地音频、视频和字幕变成一个专注的精听工
 
 ## 安装
 
-1. 前往 [Releases](https://github.com/swiftczz/DeepListen/releases/latest)，下载适合当前 Mac 架构的 DMG，或选择 universal 通用版本。
+1. 前往 [Releases](https://github.com/swiftczz/DeepListen/releases/latest)，下载 Apple Silicon（arm64）版本的 DMG。
 2. 打开 DMG，将 `DeepListen.app` 拖入“应用程序”。
 3. 首次启动时右键应用并选择“打开”。
 
@@ -149,29 +157,27 @@ DeepListen 每次载入媒体时都会重新查找字幕，因此可以先导入
 ### 编译并运行
 
 ```bash
-./script/build_and_run.sh
+./scripts/build_and_run.sh
 ```
 
 其他开发模式：
 
 | 命令 | 用途 |
 | --- | --- |
-| `./script/build_and_run.sh --debug` | 构建并使用 LLDB 调试 |
-| `./script/build_and_run.sh --logs` | 启动并跟踪进程日志 |
-| `./script/build_and_run.sh --telemetry` | 启动并跟踪应用 subsystem 日志 |
-| `./script/build_and_run.sh --verify` | 启动并验证进程是否正常存活 |
+| `./scripts/build_and_run.sh --debug` | 构建并使用 LLDB 调试 |
+| `./scripts/build_and_run.sh --logs` | 启动并跟踪进程日志 |
+| `./scripts/build_and_run.sh --telemetry` | 启动并跟踪应用 subsystem 日志 |
+| `./scripts/build_and_run.sh --verify` | 启动并验证进程是否正常存活 |
 
 ### 构建发布 DMG
 
 ```bash
-APP_VERSION=1.0.0 ./script/build_and_run.sh --build-only universal --sign --dmg
-APP_VERSION=1.0.0 ./script/build_and_run.sh --build-only arm64     --sign --dmg
-APP_VERSION=1.0.0 ./script/build_and_run.sh --build-only x86_64    --sign --dmg
+APP_VERSION=1.0.0 ./scripts/build_and_run.sh --build-only --sign --dmg
 ```
 
-- `--build-only <arch>`：使用 release 配置构建 `universal`、`arm64` 或 `x86_64`
+- `--build-only`：使用 release 配置构建 Apple Silicon（arm64）版本
 - `--sign`：为应用添加 Ad-hoc 签名
-- `--dmg`：在 `dist/` 生成 `DeepListen-<arch>-<version>.dmg`
+- `--dmg`：在 `dist/` 生成 `DeepListen-arm64-<version>.dmg`
 - `APP_VERSION`：写入 `Info.plist` 和 DMG 文件名；如果省略，则使用最新 Git 标签或 `0.0.0-dev`
 
 ## 技术栈
@@ -189,7 +195,7 @@ DeepListen/
 ├── .github/workflows/      # 发布自动化
 ├── docs/images/            # README 图片资源
 ├── Resources/              # 应用图标
-├── script/                 # 构建、运行和打包脚本
+├── scripts/                # 构建、运行和打包脚本
 ├── Sources/DeepListen/
 │   ├── App/                # 应用入口和菜单命令
 │   ├── Models/             # 音轨、字幕、播放和主题模型

@@ -14,6 +14,11 @@ let package = Package(
         .executableTarget(
             name: "DeepListen",
             path: "Sources/DeepListen"
+        ),
+        .testTarget(
+            name: "DeepListenTests",
+            dependencies: ["DeepListen"],
+            resources: [.copy("Fixtures")]
         )
     ]
 )

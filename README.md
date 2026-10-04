@@ -75,7 +75,7 @@ Standard subtitle files usually provide timing for each sentence rather than eac
 - Five-second rewind and forward controls
 - Precise timeline seeking and hover time preview
 - macOS media controls and Now Playing integration
-- Automatic restoration of the selected track and last playback position
+- Independent playback-position memory for every media file, restored when switching back or relaunching the app
 - Saved speed, playback mode, theme, and subtitle preferences
 
 ### Local Media Library
@@ -86,6 +86,14 @@ Standard subtitle files usually provide timing for each sentence rather than eac
 - Search, drag-to-reorder, multi-selection removal, and Reveal in Finder
 - Supported formats: `mp3` `m4a` `aac` `wav` `aiff` `aif` `caf` `flac` `mp4` `m4v` `mov` `avi` `mkv`
 
+MKV audio playback uses a Swift Matroska parser and native macOS audio frameworks, with no FFmpeg installation required. Files whose first enabled audio track uses AAC-LC, MP3, or PCM are supported: continuous AAC-LC packets are preserved, while MP3, PCM, and tracks with initial delays or gaps are converted to AAC by the system to retain the original timeline. On first opening, DeepListen prepares a playable M4A in the background and stores it in the user cache directory. Subsequent opens reuse the cache, and changes to the source file trigger fresh preparation. This feature plays audio; subtitles still match same-name `.srt`, `.vtt`, or `.lrc` files beside the original MKV.
+
+DTS, AC-3, Opus, Vorbis, HE-AAC, and encrypted or additionally compressed MKV audio tracks are not supported yet; these produce an explicit error message.
+
+Removing a file from the library also deletes its generated audio caches. Batch removal does the same for each removed file, and clearing the library clears all generated audio caches. Original media and subtitle files are preserved; importing a removed MKV again prepares its audio afresh.
+
+Other formats play through AVFoundation, with compatibility depending on the audio codec inside the file.
+
 ### Native macOS Experience
 
 - SwiftUI interface designed for macOS 26
@@ -95,7 +103,7 @@ Standard subtitle files usually provide timing for each sentence rather than eac
 
 ## Install
 
-1. Download the DMG for your Mac, or choose the universal build, from [Releases](https://github.com/swiftczz/DeepListen/releases/latest).
+1. Download the Apple Silicon (arm64) DMG from [Releases](https://github.com/swiftczz/DeepListen/releases/latest).
 2. Open the DMG and drag `DeepListen.app` into Applications.
 3. On first launch, right-click the app and choose **Open**.
 
@@ -149,29 +157,27 @@ Unmodified playback shortcuts are disabled while editing the search field or ano
 ### Build and Run
 
 ```bash
-./script/build_and_run.sh
+./scripts/build_and_run.sh
 ```
 
 Additional development modes:
 
 | Command | Purpose |
 | --- | --- |
-| `./script/build_and_run.sh --debug` | Build and debug with LLDB |
-| `./script/build_and_run.sh --logs` | Launch and stream process logs |
-| `./script/build_and_run.sh --telemetry` | Launch and stream app subsystem logs |
-| `./script/build_and_run.sh --verify` | Launch and verify that the process stays alive |
+| `./scripts/build_and_run.sh --debug` | Build and debug with LLDB |
+| `./scripts/build_and_run.sh --logs` | Launch and stream process logs |
+| `./scripts/build_and_run.sh --telemetry` | Launch and stream app subsystem logs |
+| `./scripts/build_and_run.sh --verify` | Launch and verify that the process stays alive |
 
 ### Build Release DMGs
 
 ```bash
-APP_VERSION=1.0.0 ./script/build_and_run.sh --build-only universal --sign --dmg
-APP_VERSION=1.0.0 ./script/build_and_run.sh --build-only arm64     --sign --dmg
-APP_VERSION=1.0.0 ./script/build_and_run.sh --build-only x86_64    --sign --dmg
+APP_VERSION=1.0.0 ./scripts/build_and_run.sh --build-only --sign --dmg
 ```
 
-- `--build-only <arch>` builds `universal`, `arm64`, or `x86_64` in release configuration
+- `--build-only` builds Apple Silicon (arm64) in release configuration
 - `--sign` applies an ad hoc signature to the app
-- `--dmg` writes `DeepListen-<arch>-<version>.dmg` to `dist/`
+- `--dmg` writes `DeepListen-arm64-<version>.dmg` to `dist/`
 - `APP_VERSION` is written to `Info.plist` and the DMG filename; if omitted, the latest Git tag or `0.0.0-dev` is used
 
 ## Tech Stack
@@ -189,7 +195,7 @@ DeepListen/
 ├── .github/workflows/      # release automation
 ├── docs/images/            # README assets
 ├── Resources/              # app icon
-├── script/                 # build, run, and packaging scripts
+├── scripts/                # build, run, and packaging scripts
 ├── Sources/DeepListen/
 │   ├── App/                # app entry point and commands
 │   ├── Models/             # tracks, subtitles, playback, and theme models

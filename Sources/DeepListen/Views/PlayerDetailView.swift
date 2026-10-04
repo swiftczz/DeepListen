@@ -18,6 +18,16 @@ struct PlayerDetailView: View {
                 VStack(spacing: 0) {
                     VStack(alignment: .leading, spacing: 24) {
                         PlayerHeaderView(track: track)
+                        if player.isPreparingMedia {
+                            ProgressView("正在准备 MKV 音轨，首次打开可能需要稍候…")
+                                .font(.callout)
+                        }
+                        if let error = player.mediaPreparationError {
+                            Label(error, systemImage: "exclamationmark.triangle")
+                                .font(.callout)
+                                .foregroundStyle(.red)
+                                .textSelection(.enabled)
+                        }
                         TransportBarView(theme: theme)
                         ABLoopView()
                         SubtitleControlsView(theme: theme)

@@ -6,6 +6,8 @@ import Observation
     private(set) var tracks: [ListeningTrack] = []
     var selectedTrackID: ListeningTrack.ID?
     private(set) var isPlaying = false
+    private(set) var isPreparingMedia = false
+    private(set) var mediaPreparationError: String?
     var currentTime: TimeInterval = 0
     var duration: TimeInterval = 0
     private(set) var playbackRate: Double
@@ -35,10 +37,13 @@ import Observation
     @ObservationIgnored private let subtitleSession = SubtitleSession()
     @ObservationIgnored private let persistence: PlayerPersistence
     @ObservationIgnored private let fileRevealer: FileRevealing
+    @ObservationIgnored private let mediaPreparer: MediaPlaybackPreparer
     @ObservationIgnored private let nowPlayingController = NowPlayingController()
 
     @ObservationIgnored private var libraryNoticeTask: Task<Void, Never>?
     @ObservationIgnored private var subtitleLoadTask: Task<Void, Never>?
+    @ObservationIgnored private var mediaPreparationTask: Task<Void, Never>?
+    @ObservationIgnored private var mediaPreparationGeneration = 0
     @ObservationIgnored private var importTask: Task<Void, Never>?
     @ObservationIgnored private var playbackPositionSaveTask: Task<Void, Never>?
     @ObservationIgnored private var playbackFeedbackTask: Task<Void, Never>?
@@ -46,10 +51,13 @@ import Observation
 
     static let importableContentTypes = MediaDiscoveryService.importableContentTypes
 
-    init(fileRevealer: FileRevealing = MacFileRevealer()) {
-        let persistence = PlayerPersistence()
+    init(fileRevealer: FileRevealing = MacFileRevealer(),
+        persistence: PlayerPersistence = PlayerPersistence(),
+        mediaPreparer: MediaPlaybackPreparer = MediaPlaybackPreparer()
+    ) {
         self.persistence = persistence
         self.fileRevealer = fileRevealer
+        self.mediaPreparer = mediaPreparer
         playbackRate = persistence.playbackRate
         playbackMode = persistence.playbackMode
         showSubtitles = persistence.showSubtitles
@@ -64,13 +72,14 @@ import Observation
         }
 
         if selectedTrackID != nil {
-            loadCurrentTrack(autoplay: false, restoresSavedPosition: true)
+            loadCurrentTrack(autoplay: false)
         }
     }
 
     isolated deinit {
         libraryNoticeTask?.cancel()
         subtitleLoadTask?.cancel()
+        mediaPreparationTask?.cancel()
         importTask?.cancel()
         playbackPositionSaveTask?.cancel()
         playbackFeedbackTask?.cancel()
@@ -278,11 +287,23 @@ import Observation
     }
 
     func play() {
+        if isPreparingMedia {
+            // Record the user's intent; pause can withdraw it before preparation completes.
+            isPlaying = true
+            updateNowPlaying()
+            return
+        }
         if !playbackEngine.hasCurrentItem {
             if selectedTrackID == nil {
                 selectedTrackID = tracks.first?.id
             }
             loadCurrentTrack(autoplay: false)
+        }
+
+        if isPreparingMedia {
+            isPlaying = true
+            updateNowPlaying()
+            return
         }
 
         guard playbackEngine.hasCurrentItem else { return }
@@ -465,6 +486,7 @@ import Observation
     func removeTrack(_ id: ListeningTrack.ID) {
         guard let index = tracks.firstIndex(where: { $0.id == id }) else { return }
         let removedSelectedTrack = tracks[index].id == selectedTrackID
+        let removedURL = tracks[index].url
         cancelDurationLoads(for: [id])
         tracks.remove(at: index)
 
@@ -475,6 +497,7 @@ import Observation
             loadCurrentTrack(autoplay: false)
         }
 
+        removeCachedAudio(for: [removedURL])
         persistLibrary()
     }
 
@@ -484,6 +507,7 @@ import Observation
         guard !ids.isEmpty else { return }
 
         let removedSelectedTrack = selectedTrackID.map { ids.contains($0) } ?? false
+        let removedURLs = tracks.filter { ids.contains($0.id) }.map(\.url)
         cancelDurationLoads(for: ids)
         tracks.removeAll { ids.contains($0.id) }
 
@@ -494,6 +518,7 @@ import Observation
             loadCurrentTrack(autoplay: false)
         }
 
+        removeCachedAudio(for: removedURLs)
         persistLibrary()
     }
 
@@ -503,6 +528,7 @@ import Observation
         isImporting = false
         subtitleLoadTask?.cancel()
         subtitleLoadTask = nil
+        cancelMediaPreparation()
         cancelDurationLoads(for: tracks.map(\.id))
         pause()
         playbackEngine.replaceCurrentItem(with: nil)
@@ -512,7 +538,20 @@ import Observation
         currentTime = 0
         duration = 0
         clearLoop()
+        do { try mediaPreparer.removeAllCachedAudio() }
+        catch { reportCacheCleanupFailure(error) }
         persistLibrary()
+    }
+
+    private func removeCachedAudio(for urls: [URL]) {
+        for url in urls {
+            do { try mediaPreparer.removeCachedAudio(for: url) }
+            catch { reportCacheCleanupFailure(error) }
+        }
+    }
+
+    private func reportCacheCleanupFailure(_ error: Error) {
+        showLibraryNotice("列表已移除，但音频缓存清理失败：\(error.localizedDescription)", kind: .warning)
     }
 
     func revealInFinder(_ track: ListeningTrack) {
@@ -575,10 +614,8 @@ import Observation
         }
     }
 
-    private func loadCurrentTrack(
-        autoplay: Bool,
-        restoresSavedPosition: Bool = false
-    ) {
+    private func loadCurrentTrack(autoplay: Bool) {
+        cancelMediaPreparation()
         guard let index = selectedTrackIndex else {
             playbackEngine.pause()
             isPlaying = false
@@ -602,12 +639,11 @@ import Observation
         // 必须先暂停：replaceCurrentItem 不会停下正在播放的 AVPlayer，
         // 新曲目会带着原速率直接开播，而 isPlaying 已被置 false，声音与按钮状态脱节。
         playbackEngine.pause()
-        playbackEngine.replaceCurrentItem(with: selectedTrack.url)
+        let needsPreparation = MediaPlaybackPreparer.needsPreparation(selectedTrack.url)
+        playbackEngine.replaceCurrentItem(with: needsPreparation ? nil : selectedTrack.url)
         isPlaying = false
         duration = selectedTrack.duration ?? 0
-        currentTime = restoresSavedPosition
-            ? restoredPlaybackPosition(for: selectedTrack)
-            : 0
+        currentTime = restoredPlaybackPosition(for: selectedTrack)
         playbackEngine.seek(to: currentTime)
         clearLoop()
         loadSubtitles(for: selectedTrack)
@@ -615,8 +651,59 @@ import Observation
         refreshDurations(for: [selectedTrack])
         updateNowPlaying()
 
+        if needsPreparation {
+            prepareMedia(for: selectedTrack, autoplay: autoplay)
+            return
+        }
+
         if autoplay {
             play()
+        }
+    }
+
+    private func cancelMediaPreparation() {
+        mediaPreparationGeneration &+= 1
+        mediaPreparationTask?.cancel()
+        mediaPreparationTask = nil
+        isPreparingMedia = false
+        mediaPreparationError = nil
+    }
+
+    private func prepareMedia(for track: ListeningTrack, autoplay: Bool) {
+        isPreparingMedia = true
+        isPlaying = autoplay
+        updateNowPlaying()
+        let generation = mediaPreparationGeneration
+        let preparer = mediaPreparer
+        mediaPreparationTask = Task { [weak self] in
+            do {
+                let playbackURL = try await preparer.prepare(track.url)
+                guard !Task.isCancelled, let self,
+                    mediaPreparationGeneration == generation, selectedTrackID == track.id
+                else { return }
+                let loadedDuration = await MediaDurationLoader.loadDuration(for: playbackURL)
+                guard !Task.isCancelled, mediaPreparationGeneration == generation else { return }
+                if let loadedDuration {
+                    applyDuration(loadedDuration, to: track.id)
+                    persistLibrary()
+                }
+                mediaPreparationTask = nil
+                isPreparingMedia = false
+                playbackEngine.replaceCurrentItem(with: playbackURL)
+                // Use the latest position/rate/play intent, including changes made while preparing.
+                playbackEngine.seek(to: currentTime)
+                if isPlaying { playbackEngine.play(rate: playbackRate) }
+                updateNowPlaying()
+            } catch {
+                guard !Task.isCancelled, let self,
+                    mediaPreparationGeneration == generation, selectedTrackID == track.id
+                else { return }
+                mediaPreparationTask = nil
+                isPreparingMedia = false
+                isPlaying = false
+                mediaPreparationError = error.localizedDescription
+                updateNowPlaying()
+            }
         }
     }
 
@@ -645,6 +732,7 @@ import Observation
     }
 
     private func handlePlaybackTick(_ seconds: TimeInterval) {
+        guard !isPreparingMedia, playbackEngine.hasCurrentItem else { return }
         guard seconds.isFinite else { return }
 
         if let itemDuration = playbackEngine.currentItemDuration,

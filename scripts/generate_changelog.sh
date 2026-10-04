@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # 生成两个 tag 之间的 changelog（按 Conventional Commits 前缀分组）
 # 兼容 macOS 自带 bash 3.2（不用关联数组、不用 mapfile）
-# 用法: ./script/generate_changelog.sh <prev_tag> <current_tag> [repo]
+# 用法: ./scripts/generate_changelog.sh <prev_tag> <current_tag> [repo]
 # 输出到 stdout
-# 例: ./script/generate_changelog.sh v0.1.0 v0.2.0 swiftczz/DeepListen
+# 例: ./scripts/generate_changelog.sh v0.1.0 v0.2.0 swiftczz/DeepListen
 set -euo pipefail
 
 prev_tag="${1:?用法: generate_changelog.sh <prev_tag> <current_tag> [repo]}"

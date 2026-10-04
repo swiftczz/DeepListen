@@ -38,27 +38,21 @@ jobs:
         run: |
           # 找上一个 tag（首次发版时为空）
           prev_tag=$(git describe --tags --abbrev=0 "${{ github.ref_name }}^" 2>/dev/null || echo "")
-          ./script/generate_changelog.sh "$prev_tag" "${{ github.ref_name }}" "${{ github.repository }}" > CHANGELOG.md
+          ./scripts/generate_changelog.sh "$prev_tag" "${{ github.ref_name }}" "${{ github.repository }}" > CHANGELOG.md
           echo "=== changelog ==="
           cat CHANGELOG.md
 
-      - name: Build universal DMG
-        run: APP_VERSION=${{ steps.ver.outputs.version }} ./script/build_and_run.sh --build-only universal --sign --dmg
-
       - name: Build arm64 DMG
-        run: APP_VERSION=${{ steps.ver.outputs.version }} ./script/build_and_run.sh --build-only arm64 --sign --dmg
-
-      - name: Build x86_64 DMG
-        run: APP_VERSION=${{ steps.ver.outputs.version }} ./script/build_and_run.sh --build-only x86_64 --sign --dmg
+        run: APP_VERSION=${{ steps.ver.outputs.version }} ./scripts/build_and_run.sh --build-only --sign --dmg
 
       - name: List DMGs
-        run: ls -lh dist/*.dmg
+        run: ls -lh dist/DeepListen-arm64-*.dmg
 
       - name: Upload DMGs to Release
         if: steps.ver.outputs.is_tag == 'true'
         uses: softprops/action-gh-release@v3
         with:
-          files: dist/*.dmg
+          files: dist/DeepListen-arm64-*.dmg
           body_path: CHANGELOG.md
 
       - name: Upload DMGs as workflow artifacts
@@ -66,4 +60,4 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: DeepListen-DMGs-${{ steps.ver.outputs.version }}
-          path: dist/*.dmg
+          path: dist/DeepListen-arm64-*.dmg
