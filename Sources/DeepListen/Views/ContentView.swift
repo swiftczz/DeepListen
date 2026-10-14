@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct ContentView: View {
@@ -161,11 +162,7 @@ struct ContentView: View {
         }
         .toolbar {
             ToolbarItem(placement: .navigation) {
-                Menu {
-                    Button("媒体库") { favorites.workspace = .library }
-                    Button("收藏") { favorites.workspace = .favorites }
-                } label: { Label(favorites.workspace.title, systemImage: favorites.workspace.symbol) }
-                .help("切换媒体库与收藏")
+                workspaceSwitcher
             }
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
@@ -221,6 +218,29 @@ struct ContentView: View {
             }
         }
         .animation(.easeOut(duration: 0.18), value: player.libraryNotice)
+    }
+
+    private var workspaceSwitcher: some View {
+        Menu {
+            ForEach(ListeningWorkspace.allCases) { workspace in
+                Button { favorites.workspace = workspace } label: { workspaceLabel(workspace) }
+                    .labelStyle(.titleAndIcon)
+            }
+        } label: { workspaceLabel(favorites.workspace) }
+        .help("切换媒体库与收藏")
+    }
+
+    private func workspaceLabel(_ workspace: ListeningWorkspace) -> some View {
+        Label { Text(workspace.title) } icon: { workspaceIcon(workspace) }
+    }
+
+    private func workspaceIcon(_ workspace: ListeningWorkspace) -> Image {
+        guard let symbol = NSImage(systemSymbolName: workspace.symbol, accessibilityDescription: workspace.title) else {
+            return Image(systemName: workspace.symbol)
+        }
+        let image = symbol.withSymbolConfiguration(.init(paletteColors: [NSColor(theme.color)])) ?? symbol
+        image.isTemplate = false
+        return Image(nsImage: image).renderingMode(.original)
     }
 
     private func loadSelectedFavorite() {

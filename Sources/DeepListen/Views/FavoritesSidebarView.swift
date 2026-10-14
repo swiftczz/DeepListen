@@ -5,38 +5,8 @@ struct WorkspaceSidebarView: View {
     var theme: AppThemeColor
     var searchFocus: FocusState<Bool>.Binding
 
-    private var workspaceSelection: Binding<ListeningWorkspace?> {
-        Binding(
-            get: { favorites.workspace },
-            set: { if let workspace = $0 { favorites.workspace = workspace } }
-        )
-    }
-
     var body: some View {
-        VStack(spacing: 0) {
-            List(selection: workspaceSelection) {
-                ForEach(ListeningWorkspace.allCases) { workspace in
-                    Label {
-                        Text(workspace.title)
-                            .foregroundStyle(favorites.workspace == workspace ? theme.selectionForegroundColor : Color.primary)
-                    } icon: {
-                        Image(systemName: workspace.symbol)
-                            .foregroundStyle(favorites.workspace == workspace ? theme.selectionForegroundColor : theme.color)
-                    }
-                        .font(.body.weight(.medium))
-                        .padding(.vertical, 6)
-                        .background(SelectionHighlightSuppressor())
-                        .tag(workspace)
-                        .listRowBackground(workspaceBackground(isSelected: favorites.workspace == workspace))
-                }
-            }
-            .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
-            .scrollDisabled(true)
-            .scrollIndicators(.hidden)
-            .frame(height: 104)
-            .accessibilityLabel("浏览")
-
+        Group {
             if favorites.workspace == .library {
                 SidebarView(theme: theme, searchFocus: searchFocus)
             } else {
@@ -44,15 +14,6 @@ struct WorkspaceSidebarView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    @ViewBuilder private func workspaceBackground(isSelected: Bool) -> some View {
-        if isSelected {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(theme.color)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 1)
-        }
     }
 }
 
